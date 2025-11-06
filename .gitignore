@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+node_modules/
+uploads/
+*.mp3
+.DS_Store
+*.log
+config.json
+

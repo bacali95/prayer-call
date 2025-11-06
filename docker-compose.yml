@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  prayer-call:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prayer-call
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./config.json:/app/config.json
+      - ./uploads:/app/uploads
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - prayer-call-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3001/api/config')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  prayer-call-network:
+    driver: bridge
+

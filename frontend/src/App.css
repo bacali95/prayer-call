@@ -1,0 +1,208 @@
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: hsl(var(--card));
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid hsl(var(--border));
+}
+
+.app-header h1 {
+  color: hsl(var(--foreground));
+  margin-bottom: 10px;
+}
+
+.app-header p {
+  color: hsl(var(--muted-foreground));
+}
+
+.app-alert {
+  margin-bottom: 20px;
+}
+
+.app-nav {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  background: hsl(var(--card));
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid hsl(var(--border));
+}
+
+.nav-link {
+  padding: 10px 20px;
+  text-decoration: none;
+  color: hsl(var(--foreground));
+  border-radius: 4px;
+  transition: all 0.2s;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.nav-link:hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.nav-link.active {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.app-main {
+  background: hsl(var(--card));
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid hsl(var(--border));
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  color: hsl(var(--muted-foreground));
+}
+
+.section {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: hsl(var(--foreground));
+}
+
+.section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.search-box {
+  display: flex;
+  gap: 10px;
+}
+
+.mosque-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.mosque-item {
+  padding: 15px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: hsl(var(--card));
+}
+
+.mosque-item:hover {
+  background-color: hsl(var(--accent));
+  border-color: hsl(var(--ring));
+}
+
+.mosque-item.selected {
+  background-color: hsl(var(--primary) / 0.1);
+  border-color: hsl(var(--primary));
+}
+
+.mosque-name {
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: hsl(var(--foreground));
+}
+
+.mosque-address {
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+}
+
+.selected-info {
+  padding: 15px;
+  background-color: hsl(var(--muted));
+  border-radius: 4px;
+  margin-top: 15px;
+}
+
+.prayer-times-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.prayer-time-card {
+  padding: 15px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  text-align: center;
+  background-color: hsl(var(--card));
+}
+
+.prayer-name {
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: hsl(var(--foreground));
+}
+
+.prayer-time {
+  font-size: 18px;
+  color: hsl(var(--primary));
+  margin-bottom: 10px;
+}
+
+.file-upload-area {
+  border: 2px dashed hsl(var(--border));
+  border-radius: 4px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+.file-upload-area:hover {
+  border-color: hsl(var(--primary));
+  background-color: hsl(var(--accent));
+}
+
+.file-upload-area input {
+  display: none;
+}
+
+.uploaded-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.prayer-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
