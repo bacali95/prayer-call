@@ -5,7 +5,7 @@ import { Alert } from "./components/ui/alert";
 import { Config } from "./types";
 import "./App.css";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 function App() {
   const [config, setConfig] = useState<Config | null>(null);
