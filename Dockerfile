@@ -20,10 +20,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including timezone data
 RUN apt-get update && apt-get install -y \
     cron \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# Configure timezone (default to UTC, can be overridden with TZ env var)
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
