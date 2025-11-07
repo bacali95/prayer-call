@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "./components/ui/alert";
 import { Config } from "./types";
 import { api } from "./lib/api";
+import { ThemeToggle } from "./components/theme-toggle";
 
 function App() {
   const queryClient = useQueryClient();
@@ -51,7 +52,10 @@ function App() {
 
   return (
     <div className="max-w-[1200px] mx-auto p-5">
-      <header className="text-center mb-5 p-5 bg-card rounded-lg shadow-sm border border-border">
+      <header className="text-center mb-5 p-5 bg-card rounded-lg shadow-sm border border-border relative">
+        <div className="absolute top-5 right-5">
+          <ThemeToggle />
+        </div>
         <h1 className="text-foreground mb-2.5">Prayer Call App</h1>
         <p className="text-muted-foreground">
           Schedule and play adhan on your Chromecast

@@ -4,9 +4,7 @@ import { RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
 import { router } from "./routes";
-
-// Enable dark mode by default
-document.documentElement.classList.add("dark");
+import { ThemeProvider } from "./contexts/theme-context";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,8 +22,10 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );
