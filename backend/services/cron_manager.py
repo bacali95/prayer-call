@@ -1,7 +1,9 @@
 """Cron job management for scheduling adhan prayers"""
 from crontab import CronTab
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pathlib import Path
+from datetime import datetime
+import os
 
 from backend.config import ConfigManager
 
@@ -32,6 +34,36 @@ class CronManager:
     def _get_config_dir(self) -> str:
         """Get the config directory from the ConfigManager"""
         return ConfigManager().config_dir
+    
+    def _get_log_file_path(self, prayer_key: str) -> str:
+        """Get the log file path for a prayer job"""
+        if prayer_key == "reschedule":
+            return "/var/log/prayer-call-reschedule.log"
+        return f"/var/log/prayer-call-{prayer_key}.log"
+    
+    def get_last_run_time(self, prayer_key: str) -> Optional[datetime]:
+        """Get the last run time for a cron job by checking log file modification time"""
+        log_file = self._get_log_file_path(prayer_key)
+        if os.path.exists(log_file):
+            try:
+                mtime = os.path.getmtime(log_file)
+                return datetime.fromtimestamp(mtime)
+            except Exception:
+                return None
+        return None
+    
+    def get_job_logs(self, prayer_key: str, max_lines: int = 100) -> Optional[str]:
+        """Get logs from the last run of a cron job"""
+        log_file = self._get_log_file_path(prayer_key)
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    # Return the last max_lines lines
+                    return ''.join(lines[-max_lines:])
+            except Exception as e:
+                return f"Error reading log file: {str(e)}"
+        return None
     
     def clear_all_jobs(self):
         """Remove all prayer call cron jobs (but keep reschedule job)"""
@@ -81,17 +113,23 @@ class CronManager:
         return True
     
     def get_scheduled_jobs(self) -> List[Dict]:
-        """Get list of currently scheduled jobs"""
+        """Get list of currently scheduled jobs with last run time"""
         jobs = []
         for job in self.cron:
             if job.comment and job.comment.startswith(self.job_comment_prefix):
                 prayer_key = job.comment.replace(self.job_comment_prefix, "")
                 # Get the schedule string
                 schedule_str = job.schedule
+                
+                # Get last run time
+                last_run = self.get_last_run_time(prayer_key)
+                last_run_str = last_run.isoformat() if last_run else None
+                
                 jobs.append({
                     "prayer": prayer_key,
                     "schedule": str(schedule_str),
-                    "command": str(job.command)
+                    "command": str(job.command),
+                    "last_run": last_run_str
                 })
         return jobs
     

@@ -11,6 +11,7 @@ const PRAYER_NAMES: { [key: string]: string } = {
   asr: "Asr",
   maghrib: "Maghrib",
   isha: "Isha",
+  reschedule: "Reschedule Prayers",
 };
 
 type PrayerTimesDisplayProps = {
@@ -27,6 +28,11 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
   const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewingLogs, setViewingLogs] = useState<{
+    prayer: string;
+    logs: string;
+  } | null>(null);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
 
   const loadCronJobs = useCallback(async (): Promise<void> => {
     try {
@@ -47,6 +53,31 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
     } catch (err) {
       setError(`Failed to remove cron job for ${prayer}`);
       console.error(err);
+    }
+  };
+
+  const viewLogs = async (prayer: string): Promise<void> => {
+    setLoadingLogs(true);
+    try {
+      const response = await axios.get<{ logs: string; prayer: string }>(
+        `${apiBase}/cron/jobs/${prayer}/logs`
+      );
+      setViewingLogs({ prayer, logs: response.data.logs });
+    } catch (err) {
+      setError(`Failed to load logs for ${prayer}`);
+      console.error(err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const formatLastRun = (lastRun: string | null | undefined): string => {
+    if (!lastRun) return "Never";
+    try {
+      const date = new Date(lastRun);
+      return date.toLocaleString();
+    } catch {
+      return "Unknown";
     }
   };
 
@@ -197,27 +228,121 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
                 <Card
                   key={index}
                   style={{
-                    padding: "10px",
+                    padding: "15px",
                     fontSize: "14px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
                   }}
                 >
-                  <div>
-                    <strong>{PRAYER_NAMES[job.prayer] || job.prayer}:</strong>{" "}
-                    {job.schedule}
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => removeCronJob(job.prayer)}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "8px",
+                    }}
                   >
-                    Remove
-                  </Button>
+                    <div>
+                      <strong>{PRAYER_NAMES[job.prayer] || job.prayer}:</strong>{" "}
+                      {job.schedule}
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      {job.last_run && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => viewLogs(job.prayer)}
+                          disabled={loadingLogs}
+                        >
+                          {loadingLogs ? "Loading..." : "View Logs"}
+                        </Button>
+                      )}
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeCronJob(job.prayer)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#666",
+                      marginTop: "4px",
+                    }}
+                  >
+                    Last run: {formatLastRun(job.last_run)}
+                  </div>
                 </Card>
               ))}
             </div>
+          </div>
+        )}
+
+        {viewingLogs && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+            onClick={() => setViewingLogs(null)}
+          >
+            <Card
+              style={{
+                maxWidth: "80%",
+                maxHeight: "80%",
+                width: "600px",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "15px",
+                }}
+              >
+                <h3 style={{ margin: 0 }}>
+                  Logs for{" "}
+                  {PRAYER_NAMES[viewingLogs.prayer] || viewingLogs.prayer}
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewingLogs(null)}
+                >
+                  Close
+                </Button>
+              </div>
+              <div
+                style={{
+                  backgroundColor: "#1e1e1e",
+                  color: "#d4d4d4",
+                  padding: "15px",
+                  borderRadius: "4px",
+                  fontFamily: "monospace",
+                  fontSize: "12px",
+                  overflow: "auto",
+                  maxHeight: "500px",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {viewingLogs.logs || "No logs available"}
+              </div>
+            </Card>
           </div>
         )}
       </div>

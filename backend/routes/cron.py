@@ -32,3 +32,17 @@ def delete_cron_job(prayer):
         return jsonify({"message": f"Cron job for {prayer} removed successfully"})
     return jsonify({"error": f"Cron job for {prayer} not found"}), 404
 
+
+@cron_bp.route("/jobs/<prayer>/logs", methods=["GET"])
+def get_cron_job_logs(prayer):
+    """Get logs from the last run of a specific cron job"""
+    from flask import request
+    
+    max_lines = request.args.get('max_lines', default=100, type=int)
+    logs = cron_manager.get_job_logs(prayer, max_lines=max_lines)
+    
+    if logs is None:
+        return jsonify({"error": f"No logs found for {prayer}"}), 404
+    
+    return jsonify({"logs": logs, "prayer": prayer})
+
