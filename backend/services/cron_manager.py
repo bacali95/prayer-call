@@ -3,6 +3,8 @@ from crontab import CronTab
 from typing import Dict, List
 from pathlib import Path
 
+from backend.config import ConfigManager
+
 
 class CronManager:
     def __init__(self):
@@ -15,13 +17,21 @@ class CronManager:
         self.cron = CronTab(user=True)
         self.job_comment_prefix = "prayer-call-"
     
-    def _get_script_path(self) -> str:
-        """Get the absolute path to the play_adhan.py script"""
-        # Go up from backend/services to project root, then to backend/scripts
+    def _get_project_root(self) -> Path:
+        """Get the absolute path to the project root directory"""
         backend_dir = Path(__file__).parent.parent
         project_root = backend_dir.parent
+        return project_root.absolute()
+    
+    def _get_script_path(self) -> str:
+        """Get the absolute path to the play_adhan.py script"""
+        project_root = self._get_project_root()
         script_path = project_root / "backend" / "scripts" / "play_adhan.py"
         return str(script_path.absolute())
+
+    def _get_config_dir(self) -> str:
+        """Get the config directory from the ConfigManager"""
+        return ConfigManager().config_dir
     
     def clear_all_jobs(self):
         """Remove all prayer call cron jobs (but keep reschedule job)"""
@@ -40,8 +50,10 @@ class CronManager:
         # Clear existing prayer jobs (but keep reschedule job)
         self.clear_all_jobs()
         
-        # Get project root directory for cd command
-        project_root = Path(self._get_script_path()).parent.parent.parent
+        # Get project root directory (where config.json is located)
+        project_root = self._get_project_root()
+        config_dir = self._get_config_dir()
+        script_path = self._get_script_path()
         
         for prayer_key, time_str in prayer_times.items():
             if not time_str:
@@ -51,10 +63,10 @@ class CronManager:
                 # Parse time (format: "HH:MM")
                 hour, minute = map(int, time_str.split(":"))
                 
-                # Create cron job with logging
+                # Create cron job with logging and CONFIG_DIR env var
                 log_file = f"/var/log/prayer-call-{prayer_key}.log"
                 job = self.cron.new(
-                    command=f"cd {project_root} && /usr/local/bin/python3 {self._get_script_path()} '{chromecast_name}' '{prayer_key}' >> {log_file} 2>&1",
+                    command=f"cd {project_root} && CONFIG_DIR='{config_dir}' /usr/local/bin/python3 {script_path} '{chromecast_name}' '{prayer_key}' >> {log_file} 2>&1",
                     comment=f"{self.job_comment_prefix}{prayer_key}"
                 )
                 job.setall(f"{minute} {hour} * * *")
@@ -102,8 +114,7 @@ class CronManager:
     
     def _get_reschedule_script_path(self) -> str:
         """Get the absolute path to the reschedule_prayers.py script"""
-        backend_dir = Path(__file__).parent.parent
-        project_root = backend_dir.parent
+        project_root = self._get_project_root()
         script_path = project_root / "backend" / "scripts" / "reschedule_prayers.py"
         return str(script_path.absolute())
     
@@ -119,14 +130,15 @@ class CronManager:
         for job in jobs_to_remove:
             self.cron.remove(job)
         
-        # Get project root directory for cd command
-        project_root = Path(self._get_script_path()).parent.parent.parent
+        # Get project root directory (where config.json is located)
+        project_root = self._get_project_root()
+        config_dir = self._get_config_dir()
         reschedule_script_path = self._get_reschedule_script_path()
         
-        # Create new reschedule job at 2am daily with logging
+        # Create new reschedule job at 2am daily with logging and CONFIG_DIR env var
         log_file = "/var/log/prayer-call-reschedule.log"
         job = self.cron.new(
-            command=f"cd {project_root} && /usr/local/bin/python3 {reschedule_script_path} >> {log_file} 2>&1",
+            command=f"cd {project_root} && CONFIG_DIR='{config_dir}' /usr/local/bin/python3 {reschedule_script_path} >> {log_file} 2>&1",
             comment=reschedule_comment
         )
         job.setall("0 2 * * *")  # 2:00 AM every day

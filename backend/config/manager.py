@@ -54,11 +54,7 @@ class ConfigManager:
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, "r") as f:
-                    config = json.load(f)
-                    # Ensure adhan_volumes exists for backward compatibility
-                    if "adhan_volumes" not in config:
-                        config["adhan_volumes"] = self._default_config["adhan_volumes"].copy()
-                    return config
+                    return json.load(f)
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Error loading config: {e}")
                 return self._default_config.copy()
@@ -90,8 +86,6 @@ class ConfigManager:
             config["adhan_files"].update(updates["adhan_files"])
         
         if "adhan_volumes" in updates:
-            if "adhan_volumes" not in config:
-                config["adhan_volumes"] = self._default_config["adhan_volumes"].copy()
             config["adhan_volumes"].update(updates["adhan_volumes"])
         
         if "prayer_times" in updates:
