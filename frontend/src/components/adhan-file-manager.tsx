@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "./ui/alert";
-import { Config, FileInfo } from "../types";
+import { Config } from "../types";
 import { FileUploadArea } from "./adhan/file-upload-area";
 import { FileList } from "./adhan/file-list";
 import { PrayerFileSelector } from "./adhan/prayer-file-selector";
+import { api } from "../lib/api";
 
 const PRAYERS = [
   { value: "fajr", label: "Fajr" },
@@ -17,65 +18,41 @@ const PRAYERS = [
 type AdhanFileManagerProps = {
   config: Config | null;
   updateConfig: (updates: Partial<Config>) => Promise<boolean>;
-  apiBase: string;
 };
 
 const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
   config,
   updateConfig,
-  apiBase,
 }) => {
-  const [files, setFiles] = useState<FileInfo[]>([]);
-  const [uploading, setUploading] = useState<boolean>(false);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
-  const loadFiles = useCallback(async (): Promise<void> => {
-    try {
-      const response = await axios.get<{ files: FileInfo[] }>(
-        `${apiBase}/files`
-      );
-      setFiles(response.data.files || []);
-    } catch (err) {
-      console.error("Failed to load files:", err);
-    }
-  }, [apiBase]);
+  const { data: filesData } = useQuery({
+    queryKey: ["files"],
+    queryFn: async () => {
+      const data = await api.getFiles();
+      return data.files || [];
+    },
+  });
 
-  useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
+  const files = filesData || [];
 
-  const handleFileUpload = async (file: File): Promise<void> => {
-    if (file.type !== "audio/mpeg" && !file.name.endsWith(".mp3")) {
-      setError("Please upload an MP3 file");
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      await axios.post(`${apiBase}/files`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      await loadFiles();
+  const uploadFileMutation = useMutation({
+    mutationFn: (file: File) => api.uploadFile(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["files"] });
       setError(null);
-    } catch (err) {
+    },
+    onError: (err) => {
       setError("Failed to upload file");
       console.error(err);
-    } finally {
-      setUploading(false);
-    }
-  };
+    },
+  });
 
-  const handleDeleteFile = async (filename: string): Promise<void> => {
-    if (!window.confirm(`Delete ${filename}?`)) return;
-
-    try {
-      await axios.delete(`${apiBase}/files/${filename}`);
-      await loadFiles();
+  const deleteFileMutation = useMutation({
+    mutationFn: (filename: string) => api.deleteFile(filename),
+    onSuccess: async (_, filename) => {
+      queryClient.invalidateQueries({ queryKey: ["files"] });
 
       // Remove from config if it was selected
       const adhanFiles = { ...config?.adhan_files };
@@ -85,10 +62,27 @@ const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
         }
       });
       await updateConfig({ adhan_files: adhanFiles });
-    } catch (err) {
+      setError(null);
+    },
+    onError: (err) => {
       setError("Failed to delete file");
       console.error(err);
+    },
+  });
+
+  const handleFileUpload = async (file: File): Promise<void> => {
+    if (file.type !== "audio/mpeg" && !file.name.endsWith(".mp3")) {
+      setError("Please upload an MP3 file");
+      return;
     }
+
+    setError(null);
+    uploadFileMutation.mutate(file);
+  };
+
+  const handleDeleteFile = async (filename: string): Promise<void> => {
+    if (!window.confirm(`Delete ${filename}?`)) return;
+    deleteFileMutation.mutate(filename);
   };
 
   const handleSelectFile = async (
@@ -110,33 +104,42 @@ const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
     await updateConfig({ adhan_volumes: adhanVolumes });
   };
 
+  const testPlayMutation = useMutation({
+    mutationFn: (data: {
+      chromecast_name: string;
+      filename: string;
+      volume?: number | null;
+    }) => api.testPlay(data),
+    onSuccess: () => {
+      setError(null);
+    },
+    onError: (err) => {
+      setError("Failed to play adhan");
+      console.error(err);
+    },
+  });
+
   const testPlay = async (filename: string, prayer?: string): Promise<void> => {
     if (!config?.chromecast) {
       setError("Please select a Chromecast first");
       return;
     }
 
-    try {
-      // Get volume for this prayer if available
-      let volume: number | null = null;
-      if (
-        prayer &&
-        config?.adhan_volumes?.[prayer] !== null &&
-        config?.adhan_volumes?.[prayer] !== undefined
-      ) {
-        volume = config.adhan_volumes[prayer];
-      }
-
-      await axios.post(`${apiBase}/test/play`, {
-        chromecast_name: config.chromecast.name,
-        filename: filename,
-        volume: volume,
-      });
-      setError(null);
-    } catch (err) {
-      setError("Failed to play adhan");
-      console.error(err);
+    // Get volume for this prayer if available
+    let volume: number | null = null;
+    if (
+      prayer &&
+      config?.adhan_volumes?.[prayer] !== null &&
+      config?.adhan_volumes?.[prayer] !== undefined
+    ) {
+      volume = config.adhan_volumes[prayer];
     }
+
+    testPlayMutation.mutate({
+      chromecast_name: config.chromecast.name,
+      filename: filename,
+      volume: volume,
+    });
   };
 
   return (
@@ -152,7 +155,10 @@ const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
       )}
 
       <div className="flex flex-col gap-3">
-        <FileUploadArea onFileSelect={handleFileUpload} uploading={uploading} />
+        <FileUploadArea
+          onFileSelect={handleFileUpload}
+          uploading={uploadFileMutation.isPending}
+        />
 
         <FileList
           files={files}
