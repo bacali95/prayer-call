@@ -41,6 +41,10 @@ RUN mkdir -p uploads
 # Create config directory
 RUN mkdir -p /app/config
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Expose port
 EXPOSE 3001
 
@@ -49,10 +53,6 @@ ENV FLASK_APP=backend.app
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:3001/api/config')" || exit 1
-
-# Run the application
-CMD ["python", "-m", "backend.app"]
+# Use entrypoint script to start cron and Flask
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 

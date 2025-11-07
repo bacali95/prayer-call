@@ -2,12 +2,10 @@
 from crontab import CronTab
 from typing import Dict, List
 from pathlib import Path
-from datetime import datetime
-import os
 
 
 class CronManager:
-    def __init__(self, script_path: str = None):
+    def __init__(self):
         """
         Initialize CronManager
         
@@ -16,7 +14,6 @@ class CronManager:
         """
         self.cron = CronTab(user=True)
         self.job_comment_prefix = "prayer-call-"
-        self.script_path = script_path or self._get_script_path()
     
     def _get_script_path(self) -> str:
         """Get the absolute path to the play_adhan.py script"""
@@ -44,7 +41,7 @@ class CronManager:
         self.clear_all_jobs()
         
         # Get project root directory for cd command
-        project_root = Path(self.script_path).parent.parent.parent
+        project_root = Path(self._get_script_path()).parent.parent.parent
         
         for prayer_key, time_str in prayer_times.items():
             if not time_str:
@@ -54,9 +51,10 @@ class CronManager:
                 # Parse time (format: "HH:MM")
                 hour, minute = map(int, time_str.split(":"))
                 
-                # Create cron job
+                # Create cron job with logging
+                log_file = f"/var/log/prayer-call-{prayer_key}.log"
                 job = self.cron.new(
-                    command=f"cd {project_root} && python3 {self.script_path} '{chromecast_name}' '{prayer_key}'",
+                    command=f"cd {project_root} && python3 {self._get_script_path()} '{chromecast_name}' '{prayer_key}' >> {log_file} 2>&1",
                     comment=f"{self.job_comment_prefix}{prayer_key}"
                 )
                 job.setall(f"{minute} {hour} * * *")
@@ -122,62 +120,16 @@ class CronManager:
             self.cron.remove(job)
         
         # Get project root directory for cd command
-        project_root = Path(self.script_path).parent.parent.parent
+        project_root = Path(self._get_script_path()).parent.parent.parent
         reschedule_script_path = self._get_reschedule_script_path()
         
-        # Create new reschedule job at 2am daily
+        # Create new reschedule job at 2am daily with logging
+        log_file = "/var/log/prayer-call-reschedule.log"
         job = self.cron.new(
-            command=f"cd {project_root} && python3 {reschedule_script_path}",
+            command=f"cd {project_root} && python3 {reschedule_script_path} >> {log_file} 2>&1",
             comment=reschedule_comment
         )
         job.setall("0 2 * * *")  # 2:00 AM every day
         
         self.cron.write()
         return True
-    
-    def schedule_remaining_prayers_today(self, prayer_times: Dict[str, str], chromecast_name: str):
-        """Schedule only the remaining prayers for today (filter out past prayers)"""
-        now = datetime.now()
-        current_time = now.hour * 60 + now.minute  # Convert to minutes since midnight
-        
-        # Get project root directory for cd command
-        project_root = Path(self.script_path).parent.parent.parent
-        
-        scheduled_count = 0
-        for prayer_key, time_str in prayer_times.items():
-            if not time_str:
-                continue
-            
-            try:
-                # Parse time (format: "HH:MM")
-                hour, minute = map(int, time_str.split(":"))
-                prayer_time = hour * 60 + minute  # Convert to minutes since midnight
-                
-                # Only schedule if prayer time hasn't passed today
-                if prayer_time > current_time:
-                    # Remove existing job for this prayer if it exists
-                    job_comment = f"{self.job_comment_prefix}{prayer_key}"
-                    existing_jobs = [
-                        job for job in self.cron
-                        if job.comment == job_comment
-                    ]
-                    for job in existing_jobs:
-                        self.cron.remove(job)
-                    
-                    # Create cron job for today only
-                    job = self.cron.new(
-                        command=f"cd {project_root} && python3 {self.script_path} '{chromecast_name}' '{prayer_key}'",
-                        comment=job_comment
-                    )
-                    job.setall(f"{minute} {hour} * * *")
-                    scheduled_count += 1
-                    print(f"Scheduled {prayer_key} for today at {time_str}")
-                else:
-                    print(f"Skipped {prayer_key} at {time_str} (already passed)")
-                    
-            except Exception as e:
-                print(f"Error scheduling {prayer_key}: {e}")
-        
-        self.cron.write()
-        return scheduled_count > 0
-

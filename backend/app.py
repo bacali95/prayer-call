@@ -38,7 +38,7 @@ def create_app():
     # Schedule the daily reschedule job at 2am
     cron_manager.schedule_reschedule_job()
     
-    # Schedule remaining prayers for today if mosque and chromecast are configured
+    # Schedule prayers for today if mosque and chromecast are configured
     config = config_manager.load()
     mosque = config.get("mosque")
     chromecast = config.get("chromecast")
@@ -52,14 +52,14 @@ def create_app():
                 from backend.utils import transform_prayer_times
                 transformed_times = transform_prayer_times(prayer_times_data)
                 if transformed_times:
-                    # Schedule remaining prayers for today
-                    cron_manager.schedule_remaining_prayers_today(
+                    # Schedule prayers for today
+                    cron_manager.schedule_prayers(
                         transformed_times,
                         chromecast["name"]
                     )
                     # Update config with prayer times
                     config_manager.update({"prayer_times": transformed_times})
-                    print("Scheduled remaining prayers for today")
+                    print("Scheduled prayers for today")
                 else:
                     print("No prayer times extracted from API response")
             else:
