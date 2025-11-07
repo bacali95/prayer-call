@@ -25,21 +25,9 @@ jobs:
         with:
           fetch-depth: 0 # Fetch all history for tags
 
-      - name: Read version from file
-        id: version
-        run: |
-          if [ -f VERSION ]; then
-            VERSION=$(cat VERSION | tr -d '[:space:]')
-          else
-            VERSION="0.0.0"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-
       - name: Determine image tags
         id: tags
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           SHA_SHORT="${{ github.sha }}"
           SHA_SHORT=${SHA_SHORT:0:7}
 
@@ -47,8 +35,7 @@ jobs:
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
 
           # Default tags
-          TAGS="${IMAGE}:${VERSION}"
-          TAGS="${TAGS},${IMAGE}:${SHA_SHORT}"
+          TAGS="${IMAGE}:${SHA_SHORT}"
 
           # Add latest tag for main branch pushes (not PRs)
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
@@ -79,7 +66,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/tags/v*' }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.title=Prayer Call App
