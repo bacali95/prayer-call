@@ -54,7 +54,7 @@ class CronManager:
                 # Create cron job with logging
                 log_file = f"/var/log/prayer-call-{prayer_key}.log"
                 job = self.cron.new(
-                    command=f"cd {project_root} && python3 {self._get_script_path()} '{chromecast_name}' '{prayer_key}' >> {log_file} 2>&1",
+                    command=f"cd {project_root} && /usr/local/bin/python3 {self._get_script_path()} '{chromecast_name}' '{prayer_key}' >> {log_file} 2>&1",
                     comment=f"{self.job_comment_prefix}{prayer_key}"
                 )
                 job.setall(f"{minute} {hour} * * *")
@@ -126,7 +126,7 @@ class CronManager:
         # Create new reschedule job at 2am daily with logging
         log_file = "/var/log/prayer-call-reschedule.log"
         job = self.cron.new(
-            command=f"cd {project_root} && python3 {reschedule_script_path} >> {log_file} 2>&1",
+            command=f"cd {project_root} && /usr/local/bin/python3 {reschedule_script_path} >> {log_file} 2>&1",
             comment=reschedule_comment
         )
         job.setall("0 2 * * *")  # 2:00 AM every day
