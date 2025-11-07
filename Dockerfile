@@ -1,5 +1,5 @@
 # Multi-stage build for Prayer Call App
-FROM node:18-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
