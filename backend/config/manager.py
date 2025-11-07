@@ -46,7 +46,8 @@ class ConfigManager:
                 "maghrib": None,
                 "isha": None
             },
-            "prayer_times": {}
+            "prayer_times": {},
+            "prayer_schedule_date": None
         }
     
     def load(self) -> Dict[str, Any]:
@@ -90,6 +91,9 @@ class ConfigManager:
         
         if "prayer_times" in updates:
             config["prayer_times"] = updates["prayer_times"]
+        
+        if "prayer_schedule_date" in updates:
+            config["prayer_schedule_date"] = updates["prayer_schedule_date"]
         
         self.save(config)
         return config

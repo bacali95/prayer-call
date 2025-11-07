@@ -1,7 +1,7 @@
 """Mosque-related routes"""
 from flask import Blueprint, request, jsonify
 from typing import TYPE_CHECKING
-from backend.utils import transform_prayer_times
+from backend.utils import transform_prayer_times, get_prayer_schedule_date
 from datetime import datetime
 
 if TYPE_CHECKING:
@@ -74,8 +74,14 @@ def get_prayer_times(mosque_id):
         else:
             print(f"⚠️  Using fallback format - extracted: {transformed_times}")
         
-        # Update config with transformed prayer times
-        config_manager.update({"prayer_times": transformed_times})
+        # Get current date in both formats
+        schedule_date = get_prayer_schedule_date()
+        
+        # Update config with transformed prayer times and schedule date
+        config_manager.update({
+            "prayer_times": transformed_times,
+            "prayer_schedule_date": schedule_date
+        })
         
         # Update cron jobs if chromecast is set
         config = config_manager.load()

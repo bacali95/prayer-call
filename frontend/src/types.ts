@@ -35,10 +35,16 @@ export type CronJob = {
   last_run?: string | null;
 };
 
+export type PrayerScheduleDate = {
+  gregorian: string;
+  hijri: string;
+};
+
 export type Config = {
   mosque?: Mosque;
   chromecast?: ChromecastDevice;
   adhan_files?: AdhanFiles;
   adhan_volumes?: AdhanVolumes;
   prayer_times?: PrayerTimes;
+  prayer_schedule_date?: PrayerScheduleDate;
 };

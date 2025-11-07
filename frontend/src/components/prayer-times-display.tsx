@@ -125,7 +125,12 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
 
   return (
     <div className="section">
-      <h2 className="section-title">Prayer Times Schedule</h2>
+      <div className="flex gap-2 w-full justify-between items-center mb-4">
+        <h2 className="section-title">Prayer Times Schedule</h2>
+        <Button onClick={refreshPrayerTimes} disabled={loading}>
+          {loading ? "Refreshing..." : "Refresh Prayer Times"}
+        </Button>
+      </div>
 
       {error && (
         <Alert type="error" style={{ marginBottom: "15px" }}>
@@ -134,23 +139,35 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
       )}
 
       <div className="section-content">
-        <div style={{ marginBottom: "20px" }}>
-          <Button onClick={refreshPrayerTimes} disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh Prayer Times"}
-          </Button>
+        {config.prayer_schedule_date && (
+          <Card
+            style={{
+              padding: "15px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ marginBottom: "8px" }}>
+              <strong>{config.prayer_schedule_date.gregorian}</strong>
+            </div>
+            <div style={{ fontSize: "14px", color: "#666" }}>
+              {config.prayer_schedule_date.hijri}
+            </div>
+          </Card>
+        )}
+
+        <div className="flex gap-2 w-full">
+          {config.mosque && (
+            <Card className="w-full" style={{ padding: "15px" }}>
+              <strong>Mosque:</strong> {config.mosque.name}
+            </Card>
+          )}
+
+          {config.chromecast && (
+            <Card className="w-full" style={{ padding: "15px" }}>
+              <strong>Chromecast:</strong> {config.chromecast.name}
+            </Card>
+          )}
         </div>
-
-        {config.mosque && (
-          <Card style={{ padding: "15px" }}>
-            <strong>Mosque:</strong> {config.mosque.name}
-          </Card>
-        )}
-
-        {config.chromecast && (
-          <Card style={{ padding: "15px" }}>
-            <strong>Chromecast:</strong> {config.chromecast.name}
-          </Card>
-        )}
 
         {Object.keys(prayerTimes).length > 0 ? (
           <div className="prayer-times-grid">

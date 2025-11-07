@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from backend.config import ConfigManager
 from backend.services import MawaqitClient, CronManager
-from backend.utils import transform_prayer_times
+from backend.utils import transform_prayer_times, get_prayer_schedule_date
 
 
 def main():
@@ -53,8 +53,14 @@ def main():
     
     print(f"Extracted prayer times: {transformed_times}")
     
-    # Update config with new prayer times
-    config_manager.update({"prayer_times": transformed_times})
+    # Get current date in both formats
+    schedule_date = get_prayer_schedule_date()
+    
+    # Update config with new prayer times and schedule date
+    config_manager.update({
+        "prayer_times": transformed_times,
+        "prayer_schedule_date": schedule_date
+    })
     
     # Schedule new cron jobs
     cron_manager = CronManager()
