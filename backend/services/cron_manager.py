@@ -26,10 +26,12 @@ class CronManager:
         return str(script_path.absolute())
     
     def clear_all_jobs(self):
-        """Remove all prayer call cron jobs"""
+        """Remove all prayer call cron jobs (but keep reschedule job)"""
+        reschedule_comment = f"{self.job_comment_prefix}reschedule"
         jobs_to_remove = [
             job for job in self.cron
-            if job.comment and job.comment.startswith(self.job_comment_prefix)
+            if job.comment and job.comment.startswith(self.job_comment_prefix) 
+            and job.comment != reschedule_comment
         ]
         for job in jobs_to_remove:
             self.cron.remove(job)
@@ -37,7 +39,7 @@ class CronManager:
     
     def schedule_prayers(self, prayer_times: Dict[str, str], chromecast_name: str):
         """Schedule cron jobs for all prayer times"""
-        # Clear existing jobs first
+        # Clear existing prayer jobs (but keep reschedule job)
         self.clear_all_jobs()
         
         # Get project root directory for cd command
@@ -60,6 +62,9 @@ class CronManager:
                 
             except Exception as e:
                 print(f"Error scheduling {prayer_key}: {e}")
+        
+        # Recreate reschedule job if it was removed
+        self.schedule_reschedule_job()
         
         self.cron.write()
         return True
@@ -92,6 +97,39 @@ class CronManager:
         
         for job in jobs_to_remove:
             self.cron.remove(job)
+        
+        self.cron.write()
+        return True
+    
+    def _get_reschedule_script_path(self) -> str:
+        """Get the absolute path to the reschedule_prayers.py script"""
+        backend_dir = Path(__file__).parent.parent
+        project_root = backend_dir.parent
+        script_path = project_root / "backend" / "scripts" / "reschedule_prayers.py"
+        return str(script_path.absolute())
+    
+    def schedule_reschedule_job(self):
+        """Schedule a daily job at 2am to reschedule prayers"""
+        reschedule_comment = f"{self.job_comment_prefix}reschedule"
+        
+        # Remove existing reschedule job if it exists
+        jobs_to_remove = [
+            job for job in self.cron
+            if job.comment == reschedule_comment
+        ]
+        for job in jobs_to_remove:
+            self.cron.remove(job)
+        
+        # Get project root directory for cd command
+        project_root = Path(self.script_path).parent.parent.parent
+        reschedule_script_path = self._get_reschedule_script_path()
+        
+        # Create new reschedule job at 2am daily
+        job = self.cron.new(
+            command=f"cd {project_root} && python3 {reschedule_script_path}",
+            comment=reschedule_comment
+        )
+        job.setall("0 2 * * *")  # 2:00 AM every day
         
         self.cron.write()
         return True

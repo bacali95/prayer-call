@@ -35,6 +35,9 @@ def create_app():
     cron_manager = CronManager()
     mawaqit_client = MawaqitClient()
     
+    # Schedule the daily reschedule job at 2am
+    cron_manager.schedule_reschedule_job()
+    
     # Initialize route blueprints with dependencies
     from backend.routes.config import init_managers as init_config_managers
     from backend.routes.mosques import init_services as init_mosques_services
