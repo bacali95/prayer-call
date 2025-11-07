@@ -3,17 +3,14 @@ FROM node:24-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Copy package files
-COPY frontend/package*.json ./
-
-# Install dependencies
-RUN npm install
-
 # Copy frontend source
 COPY frontend/ ./
 
+# Install dependencies
+RUN yarn install
+
 # Build React app
-RUN npm run build
+RUN yarn build
 
 # Python backend stage
 FROM python:3.11-slim
