@@ -2,6 +2,7 @@
 from crontab import CronTab
 from typing import Dict, List
 from pathlib import Path
+from datetime import datetime
 import os
 
 
@@ -133,4 +134,50 @@ class CronManager:
         
         self.cron.write()
         return True
+    
+    def schedule_remaining_prayers_today(self, prayer_times: Dict[str, str], chromecast_name: str):
+        """Schedule only the remaining prayers for today (filter out past prayers)"""
+        now = datetime.now()
+        current_time = now.hour * 60 + now.minute  # Convert to minutes since midnight
+        
+        # Get project root directory for cd command
+        project_root = Path(self.script_path).parent.parent.parent
+        
+        scheduled_count = 0
+        for prayer_key, time_str in prayer_times.items():
+            if not time_str:
+                continue
+            
+            try:
+                # Parse time (format: "HH:MM")
+                hour, minute = map(int, time_str.split(":"))
+                prayer_time = hour * 60 + minute  # Convert to minutes since midnight
+                
+                # Only schedule if prayer time hasn't passed today
+                if prayer_time > current_time:
+                    # Remove existing job for this prayer if it exists
+                    job_comment = f"{self.job_comment_prefix}{prayer_key}"
+                    existing_jobs = [
+                        job for job in self.cron
+                        if job.comment == job_comment
+                    ]
+                    for job in existing_jobs:
+                        self.cron.remove(job)
+                    
+                    # Create cron job for today only
+                    job = self.cron.new(
+                        command=f"cd {project_root} && python3 {self.script_path} '{chromecast_name}' '{prayer_key}'",
+                        comment=job_comment
+                    )
+                    job.setall(f"{minute} {hour} * * *")
+                    scheduled_count += 1
+                    print(f"Scheduled {prayer_key} for today at {time_str}")
+                else:
+                    print(f"Skipped {prayer_key} at {time_str} (already passed)")
+                    
+            except Exception as e:
+                print(f"Error scheduling {prayer_key}: {e}")
+        
+        self.cron.write()
+        return scheduled_count > 0
 
