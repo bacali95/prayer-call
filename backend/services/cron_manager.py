@@ -9,13 +9,16 @@ from backend.config import ConfigManager
 
 
 class CronManager:
-    def __init__(self):
+    def __init__(self, log_dir: str = None):
         """
         Initialize CronManager
         
         Args:
-            script_path: Path to play_adhan.py script (auto-detected if None)
+            log_dir: Directory to store log files (defaults to /var/log)
         """
+        if log_dir is None:
+            log_dir = os.environ.get("LOG_DIR", "/var/log")
+        self.log_dir = log_dir
         self.cron = CronTab(user=True)
         self.job_comment_prefix = "prayer-call-"
     
@@ -38,8 +41,8 @@ class CronManager:
     def _get_log_file_path(self, prayer_key: str) -> str:
         """Get the log file path for a prayer job"""
         if prayer_key == "reschedule":
-            return "/var/log/prayer-call-reschedule.log"
-        return f"/var/log/prayer-call-{prayer_key}.log"
+            return f"{self.log_dir}/prayer-call-reschedule.log"
+        return f"{self.log_dir}/prayer-call-{prayer_key}.log"
     
     def get_last_run_time(self, prayer_key: str) -> Optional[datetime]:
         """Get the last run time for a cron job by checking log file modification time"""
@@ -96,7 +99,7 @@ class CronManager:
                 hour, minute = map(int, time_str.split(":"))
                 
                 # Create cron job with logging and CONFIG_DIR env var
-                log_file = f"/var/log/prayer-call-{prayer_key}.log"
+                log_file = self._get_log_file_path(prayer_key)
                 job = self.cron.new(
                     command=f"cd {project_root} && CONFIG_DIR='{config_dir}' /usr/local/bin/python3 {script_path} '{chromecast_name}' '{prayer_key}' >> {log_file} 2>&1",
                     comment=f"{self.job_comment_prefix}{prayer_key}"
@@ -174,7 +177,7 @@ class CronManager:
         reschedule_script_path = self._get_reschedule_script_path()
         
         # Create new reschedule job at 2am daily with logging and CONFIG_DIR env var
-        log_file = "/var/log/prayer-call-reschedule.log"
+        log_file = self._get_log_file_path("reschedule")
         job = self.cron.new(
             command=f"cd {project_root} && CONFIG_DIR='{config_dir}' /usr/local/bin/python3 {reschedule_script_path} >> {log_file} 2>&1",
             comment=reschedule_comment

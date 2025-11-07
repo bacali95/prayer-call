@@ -299,7 +299,7 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
               style={{
                 maxWidth: "80%",
                 maxHeight: "80%",
-                width: "600px",
+                width: "1000px",
                 padding: "20px",
                 display: "flex",
                 flexDirection: "column",
