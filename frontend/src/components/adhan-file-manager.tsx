@@ -1,16 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Button } from "./ui/button";
-import { Card } from "./ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import { Alert } from "./ui/alert";
 import { Config, FileInfo } from "../types";
+import { FileUploadArea } from "./adhan/file-upload-area";
+import { FileList } from "./adhan/file-list";
+import { PrayerFileSelector } from "./adhan/prayer-file-selector";
 
 const PRAYERS = [
   { value: "fajr", label: "Fajr" },
@@ -50,12 +44,7 @@ const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
     loadFiles();
   }, [loadFiles]);
 
-  const handleFileUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ): Promise<void> => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleFileUpload = async (file: File): Promise<void> => {
     if (file.type !== "audio/mpeg" && !file.name.endsWith(".mp3")) {
       setError("Please upload an MP3 file");
       return;
@@ -78,7 +67,6 @@ const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
       console.error(err);
     } finally {
       setUploading(false);
-      e.target.value = ""; // Reset input
     }
   };
 
@@ -152,63 +140,29 @@ const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
   };
 
   return (
-    <div className="section">
-      <h2 className="section-title">Manage Adhan Files</h2>
+    <div>
+      <h2 className="text-xl font-semibold mb-3 text-foreground">
+        Manage Adhan Files
+      </h2>
 
       {error && (
-        <Alert type="error" style={{ marginBottom: "12px" }}>
+        <Alert type="error" className="mb-3">
           {error}
         </Alert>
       )}
 
-      <div className="section-content">
-        <div className="file-upload-area">
-          <input
-            type="file"
-            accept=".mp3,audio/mpeg"
-            onChange={handleFileUpload}
-            disabled={uploading}
-            id="file-upload"
-          />
-          <label htmlFor="file-upload">
-            {uploading ? "Uploading..." : "Click to upload MP3 file"}
-          </label>
-        </div>
+      <div className="flex flex-col gap-3">
+        <FileUploadArea onFileSelect={handleFileUpload} uploading={uploading} />
 
-        {files.length > 0 && (
-          <div className="uploaded-files">
-            <h3 style={{ marginBottom: "12px" }}>Uploaded Files</h3>
-            {files.map((file) => (
-              <Card key={file.name} className="file-item">
-                <div>
-                  <strong>{file.name}</strong>
-                  <span className="text-muted-foreground ml-2.5">
-                    ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <Button
-                    size="sm"
-                    onClick={() => testPlay(file.name)}
-                    disabled={!config?.chromecast}
-                  >
-                    Test Play
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleDeleteFile(file.name)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+        <FileList
+          files={files}
+          onTestPlay={(filename) => testPlay(filename)}
+          onDelete={handleDeleteFile}
+          canTestPlay={!!config?.chromecast}
+        />
 
-        <div className="prayer-selector">
-          <h3 style={{ marginBottom: "12px" }}>Assign Files to Prayers</h3>
+        <div className="flex flex-col gap-3">
+          <h3 className="mb-3">Assign Files to Prayers</h3>
           {PRAYERS.map((prayer) => {
             const selectedFile = config?.adhan_files?.[prayer.value];
             const volumePercent =
@@ -218,67 +172,15 @@ const AdhanFileManager: React.FC<AdhanFileManagerProps> = ({
                 : null;
 
             return (
-              <div key={prayer.value}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "4px",
-                    fontWeight: 600,
-                  }}
-                >
-                  {prayer.label}
-                </label>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    alignItems: "flex-end",
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <Select
-                      value={selectedFile || undefined}
-                      onValueChange={(value) => {
-                        handleSelectFile(prayer.value, value);
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a file..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {files.map((file) => (
-                          <SelectItem key={file.name} value={file.name}>
-                            {file.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div style={{ width: "120px" }}>
-                    <label className="block text-xs mb-1 text-muted-foreground">
-                      Volume (%)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={volumePercent !== null ? volumePercent : ""}
-                      onChange={(e) => {
-                        const value =
-                          e.target.value === ""
-                            ? null
-                            : parseInt(e.target.value, 10);
-                        if (value === null || (value >= 0 && value <= 100)) {
-                          handleVolumeChange(prayer.value, value);
-                        }
-                      }}
-                      placeholder="Auto"
-                      className="w-full px-2 py-2 border border-input rounded-md text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    />
-                  </div>
-                </div>
-              </div>
+              <PrayerFileSelector
+                key={prayer.value}
+                prayer={prayer}
+                files={files}
+                selectedFile={selectedFile}
+                volumePercent={volumePercent}
+                onFileSelect={handleSelectFile}
+                onVolumeChange={handleVolumeChange}
+              />
             );
           })}
         </div>

@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
 import { Alert } from "./ui/alert";
 import { Config, ChromecastDevice } from "../types";
+import { SelectedInfo } from "./shared/selected-info";
+import { DeviceList } from "./shared/device-list";
 
 type ChromecastSelectorProps = {
   config: Config | null;
@@ -48,49 +49,41 @@ const ChromecastSelector: React.FC<ChromecastSelectorProps> = ({
   };
 
   return (
-    <div className="section">
-      <h2 className="section-title">Select Chromecast</h2>
+    <div>
+      <h2 className="text-xl font-semibold mb-3 text-foreground">
+        Select Chromecast
+      </h2>
 
       {error && (
-        <Alert type="error" style={{ marginBottom: "15px" }}>
+        <Alert type="error" className="mb-4">
           {error}
         </Alert>
       )}
 
-      <div className="section-content">
+      <div className="flex flex-col gap-3">
         <Button onClick={scanForDevices} disabled={scanning}>
           {scanning ? "Scanning..." : "Scan for Chromecast Devices"}
         </Button>
 
         {config?.chromecast && (
-          <Card className="selected-info">
-            <div className="mosque-name">
-              Selected: {config.chromecast.name}
-            </div>
-            <div className="mosque-address">
-              Model: {config.chromecast.model_name || "Unknown"}
-            </div>
-          </Card>
+          <SelectedInfo
+            title={`Selected: ${config.chromecast.name}`}
+            subtitle={`Model: ${config.chromecast.model_name || "Unknown"}`}
+          />
         )}
 
-        {devices.length > 0 && (
-          <div className="mosque-list">
-            {devices.map((device) => (
-              <Card
-                key={device.uuid}
-                className={`mosque-item ${
-                  config?.chromecast?.uuid === device.uuid ? "selected" : ""
-                }`}
-                onClick={() => selectDevice(device)}
-              >
-                <div className="mosque-name">{device.name}</div>
-                <div className="mosque-address">
-                  {device.model_name} • {device.cast_type}
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+        <DeviceList
+          devices={devices.map((device) => ({
+            id: device.uuid,
+            name: device.name,
+            subtitle: `${device.model_name} • ${device.cast_type}`,
+          }))}
+          selectedId={config?.chromecast?.uuid}
+          onSelect={(device) => {
+            const chromecast = devices.find((d) => d.uuid === device.id);
+            if (chromecast) selectDevice(chromecast);
+          }}
+        />
 
         {devices.length === 0 && !scanning && (
           <p className="text-muted-foreground text-center mt-5">

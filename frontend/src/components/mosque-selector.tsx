@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Card } from "./ui/card";
 import { Alert } from "./ui/alert";
 import { Config, Mosque, PrayerTimes } from "../types";
+import { SearchBox } from "./shared/search-box";
+import { SelectedInfo } from "./shared/selected-info";
+import { DeviceList } from "./shared/device-list";
 
 type MosqueSelectorProps = {
   config: Config | null;
@@ -43,9 +43,12 @@ const MosqueSelector: React.FC<MosqueSelectorProps> = ({
       if (mosques.length === 0) {
         setError("No mosques found. Try a different search term.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage =
-        err.response?.data?.error || err.message || "Failed to search mosques";
+        (err as { response?: { data?: { error?: string }; message?: string } })
+          .response?.data?.error ||
+        (err as { message?: string }).message ||
+        "Failed to search mosques";
       setError(errorMessage);
       console.error("Search error:", err);
     } finally {
@@ -74,61 +77,49 @@ const MosqueSelector: React.FC<MosqueSelectorProps> = ({
     }
   };
 
+  const selectedMosqueId =
+    config?.mosque?.uuid || config?.mosque?.id || undefined;
+
   return (
-    <div className="section">
-      <h2 className="section-title">Select Mosque</h2>
+    <div>
+      <h2 className="text-xl font-semibold mb-3 text-foreground">
+        Select Mosque
+      </h2>
 
       {error && (
-        <Alert type="error" style={{ marginBottom: "15px" }}>
+        <Alert type="error" className="mb-4">
           {error}
         </Alert>
       )}
 
-      <div className="section-content">
-        <div className="search-box">
-          <Input
-            type="text"
-            placeholder="Search for a mosque..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && searchMosques()}
-            style={{ flex: 1 }}
-          />
-          <Button onClick={searchMosques} disabled={loading}>
-            {loading ? "Searching..." : "Search"}
-          </Button>
-        </div>
+      <div className="flex flex-col gap-3">
+        <SearchBox
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onSearch={searchMosques}
+          placeholder="Search for a mosque..."
+          loading={loading}
+        />
 
         {config?.mosque && (
-          <Card className="selected-info">
-            <div className="mosque-name">Selected: {config.mosque.name}</div>
-            {config.mosque.address && (
-              <div className="mosque-address">{config.mosque.address}</div>
-            )}
-          </Card>
+          <SelectedInfo
+            title={`Selected: ${config.mosque.name}`}
+            subtitle={config.mosque.address}
+          />
         )}
 
-        {mosques.length > 0 && (
-          <div className="mosque-list">
-            {mosques.map((mosque) => (
-              <Card
-                key={mosque.uuid || mosque.id}
-                className={`mosque-item ${
-                  config?.mosque?.uuid === mosque.uuid ||
-                  config?.mosque?.id === mosque.id
-                    ? "selected"
-                    : ""
-                }`}
-                onClick={() => selectMosque(mosque)}
-              >
-                <div className="mosque-name">{mosque.name}</div>
-                {mosque.address && (
-                  <div className="mosque-address">{mosque.address}</div>
-                )}
-              </Card>
-            ))}
-          </div>
-        )}
+        <DeviceList
+          devices={mosques.map((mosque) => ({
+            id: mosque.uuid || mosque.id || "",
+            name: mosque.name,
+            subtitle: mosque.address,
+          }))}
+          selectedId={selectedMosqueId}
+          onSelect={(device) => {
+            const mosque = mosques.find((m) => (m.uuid || m.id) === device.id);
+            if (mosque) selectMosque(mosque);
+          }}
+        />
       </div>
     </div>
   );
