@@ -35,40 +35,6 @@ def create_app():
     cron_manager = CronManager()
     mawaqit_client = MawaqitClient()
     
-    # Schedule the daily reschedule job at 2am
-    cron_manager.schedule_reschedule_job()
-    
-    # Schedule prayers for today if mosque and chromecast are configured
-    config = config_manager.load()
-    mosque = config.get("mosque")
-    chromecast = config.get("chromecast")
-    
-    if mosque and mosque.get("uuid") and chromecast and chromecast.get("name"):
-        print(f"Mosque and chromecast configured. Fetching prayer times for today...")
-        try:
-            # Fetch prayer times for today
-            prayer_times_data = mawaqit_client.get_prayer_times(mosque["uuid"])
-            if prayer_times_data:
-                from backend.utils import transform_prayer_times
-                transformed_times = transform_prayer_times(prayer_times_data)
-                if transformed_times:
-                    # Schedule prayers for today
-                    cron_manager.schedule_prayers(
-                        transformed_times,
-                        chromecast["name"]
-                    )
-                    # Update config with prayer times
-                    config_manager.update({"prayer_times": transformed_times})
-                    print("Scheduled prayers for today")
-                else:
-                    print("No prayer times extracted from API response")
-            else:
-                print("Failed to fetch prayer times from API")
-        except Exception as e:
-            print(f"Error scheduling prayers on startup: {e}")
-    else:
-        print("Mosque or chromecast not configured. Skipping prayer scheduling on startup.")
-    
     # Initialize route blueprints with dependencies
     from backend.routes.config import init_managers as init_config_managers
     from backend.routes.mosques import init_services as init_mosques_services
@@ -94,6 +60,40 @@ def create_app():
     
     # Serve React app for production
     if PRODUCTION:
+        # Schedule the daily reschedule job at 2am
+        cron_manager.schedule_reschedule_job()
+        
+        # Schedule prayers for today if mosque and chromecast are configured
+        config = config_manager.load()
+        mosque = config.get("mosque")
+        chromecast = config.get("chromecast")
+        
+        if mosque and mosque.get("uuid") and chromecast and chromecast.get("name"):
+            print(f"Mosque and chromecast configured. Fetching prayer times for today...")
+            try:
+                # Fetch prayer times for today
+                prayer_times_data = mawaqit_client.get_prayer_times(mosque["uuid"])
+                if prayer_times_data:
+                    from backend.utils import transform_prayer_times
+                    transformed_times = transform_prayer_times(prayer_times_data)
+                    if transformed_times:
+                        # Schedule prayers for today
+                        cron_manager.schedule_prayers(
+                            transformed_times,
+                            chromecast["name"]
+                        )
+                        # Update config with prayer times
+                        config_manager.update({"prayer_times": transformed_times})
+                        print("Scheduled prayers for today")
+                    else:
+                        print("No prayer times extracted from API response")
+                else:
+                    print("Failed to fetch prayer times from API")
+            except Exception as e:
+                print(f"Error scheduling prayers on startup: {e}")
+        else:
+            print("Mosque or chromecast not configured. Skipping prayer scheduling on startup.")
+
         @app.route("/", defaults={"path": ""})
         @app.route("/<path:path>")
         def serve_react(path):
