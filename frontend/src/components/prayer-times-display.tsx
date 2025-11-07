@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Alert } from "./ui/alert";
-import { Config, CronJob, PrayerTimes } from "../types";
+import { Config } from "../types";
 import { PrayerTimesGrid } from "./prayer-times/prayer-times-grid";
 import { CronJobList } from "./prayer-times/cron-job-list";
 import { LogsModal } from "./prayer-times/logs-modal";
+import { api } from "../lib/api";
 
 const PRAYER_NAMES: { [key: string]: string } = {
   fajr: "Fajr",
@@ -20,88 +21,86 @@ const PRAYER_NAMES: { [key: string]: string } = {
 type PrayerTimesDisplayProps = {
   config: Config | null;
   updateConfig: (updates: Partial<Config>) => Promise<boolean>;
-  apiBase: string;
 };
 
 const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
   config,
   updateConfig,
-  apiBase,
 }) => {
-  const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [viewingLogs, setViewingLogs] = useState<{
     prayer: string;
     logs: string;
   } | null>(null);
-  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
 
-  const loadCronJobs = useCallback(async (): Promise<void> => {
-    try {
-      const response = await axios.get<{ jobs: CronJob[] }>(
-        `${apiBase}/cron/jobs`
-      );
-      setCronJobs(response.data.jobs || []);
-    } catch (err) {
-      console.error("Failed to load cron jobs:", err);
-    }
-  }, [apiBase]);
+  const { data: cronJobsData } = useQuery({
+    queryKey: ["cronJobs"],
+    queryFn: async () => {
+      const data = await api.getCronJobs();
+      return data.jobs || [];
+    },
+  });
 
-  const removeCronJob = async (prayer: string): Promise<void> => {
-    try {
-      await axios.delete(`${apiBase}/cron/jobs/${prayer}`);
-      await loadCronJobs();
+  const cronJobs = cronJobsData || [];
+
+  const removeCronJobMutation = useMutation({
+    mutationFn: (prayer: string) => api.deleteCronJob(prayer),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cronJobs"] });
       setError(null);
-    } catch (err) {
+    },
+    onError: (err, prayer) => {
       setError(`Failed to remove cron job for ${prayer}`);
       console.error(err);
-    }
+    },
+  });
+
+  const getLogsMutation = useMutation({
+    mutationFn: (prayer: string) => api.getCronJobLogs(prayer),
+    onSuccess: (data, prayer) => {
+      setViewingLogs({ prayer, logs: data.logs });
+    },
+    onError: (err, prayer) => {
+      setError(`Failed to load logs for ${prayer}`);
+      console.error(err);
+    },
+  });
+
+  const refreshPrayerTimesMutation = useMutation({
+    mutationFn: async () => {
+      if (!config?.mosque) {
+        throw new Error("Please select a mosque first");
+      }
+      const mosqueId = config.mosque.uuid || config.mosque.id;
+      if (!mosqueId) {
+        throw new Error("Invalid mosque ID");
+      }
+      return api.getPrayerTimes(mosqueId);
+    },
+    onSuccess: async (prayerTimes) => {
+      await updateConfig({ prayer_times: prayerTimes });
+      queryClient.invalidateQueries({ queryKey: ["cronJobs"] });
+      setError(null);
+    },
+    onError: (err) => {
+      setError(
+        err instanceof Error ? err.message : "Failed to refresh prayer times"
+      );
+      console.error(err);
+    },
+  });
+
+  const removeCronJob = async (prayer: string): Promise<void> => {
+    removeCronJobMutation.mutate(prayer);
   };
 
   const viewLogs = async (prayer: string): Promise<void> => {
-    setLoadingLogs(true);
-    try {
-      const response = await axios.get<{ logs: string; prayer: string }>(
-        `${apiBase}/cron/jobs/${prayer}/logs`
-      );
-      setViewingLogs({ prayer, logs: response.data.logs });
-    } catch (err) {
-      setError(`Failed to load logs for ${prayer}`);
-      console.error(err);
-    } finally {
-      setLoadingLogs(false);
-    }
+    getLogsMutation.mutate(prayer);
   };
 
-  useEffect(() => {
-    loadCronJobs();
-  }, [loadCronJobs]);
-
   const refreshPrayerTimes = async (): Promise<void> => {
-    if (!config?.mosque) {
-      setError("Please select a mosque first");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const mosqueId = config.mosque.uuid || config.mosque.id;
-      const response = await axios.get<PrayerTimes>(
-        `${apiBase}/mosques/${mosqueId}/prayer-times`
-      );
-
-      await updateConfig({ prayer_times: response.data });
-      await loadCronJobs();
-      setError(null);
-    } catch (err) {
-      setError("Failed to refresh prayer times");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    refreshPrayerTimesMutation.mutate();
   };
 
   if (!config?.mosque) {
@@ -122,8 +121,13 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
         <h2 className="text-xl font-semibold mb-3 text-foreground">
           Prayer Times Schedule
         </h2>
-        <Button onClick={refreshPrayerTimes} disabled={loading}>
-          {loading ? "Refreshing..." : "Refresh Prayer Times"}
+        <Button
+          onClick={refreshPrayerTimes}
+          disabled={refreshPrayerTimesMutation.isPending}
+        >
+          {refreshPrayerTimesMutation.isPending
+            ? "Refreshing..."
+            : "Refresh Prayer Times"}
         </Button>
       </div>
 
@@ -177,7 +181,7 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
           prayerNames={PRAYER_NAMES}
           onViewLogs={viewLogs}
           onRemove={removeCronJob}
-          loadingLogs={loadingLogs}
+          loadingLogs={getLogsMutation.isPending}
         />
       </div>
 

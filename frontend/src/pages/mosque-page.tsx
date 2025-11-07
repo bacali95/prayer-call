@@ -5,18 +5,11 @@ import { Config } from "../types";
 type AppContext = {
   config: Config | null;
   updateConfig: (updates: Partial<Config>) => Promise<boolean>;
-  apiBase: string;
 };
 
 const MosquePage = () => {
-  const { config, updateConfig, apiBase } = useOutletContext<AppContext>();
-  return (
-    <MosqueSelector
-      config={config}
-      updateConfig={updateConfig}
-      apiBase={apiBase}
-    />
-  );
+  const { config, updateConfig } = useOutletContext<AppContext>();
+  return <MosqueSelector config={config} updateConfig={updateConfig} />;
 };
 
 export default MosquePage;

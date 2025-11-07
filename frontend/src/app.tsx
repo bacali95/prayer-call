@@ -1,45 +1,43 @@
-import { useState, useEffect } from "react";
 import { Outlet, NavLink } from "react-router-dom";
-import axios from "axios";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "./components/ui/alert";
 import { Config } from "./types";
-
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+import { api } from "./lib/api";
 
 function App() {
-  const [config, setConfig] = useState<Config | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    loadConfig();
-  }, []);
+  const {
+    data: config,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: ["config"],
+    queryFn: api.getConfig,
+  });
 
-  const loadConfig = async (): Promise<void> => {
-    try {
-      const response = await axios.get<Config>(`${API_BASE}/config`);
-      setConfig(response.data);
-      setError(null);
-    } catch (err) {
-      setError("Failed to load configuration");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const updateConfigMutation = useMutation({
+    mutationFn: api.updateConfig,
+    onSuccess: (data) => {
+      queryClient.setQueryData(["config"], data);
+    },
+  });
 
   const updateConfig = async (updates: Partial<Config>): Promise<boolean> => {
     try {
-      const response = await axios.post<Config>(`${API_BASE}/config`, updates);
-      setConfig(response.data);
-      setError(null);
+      await updateConfigMutation.mutateAsync(updates);
       return true;
     } catch (err) {
-      setError("Failed to update configuration");
       console.error(err);
       return false;
     }
   };
+
+  const error = queryError
+    ? "Failed to load configuration"
+    : updateConfigMutation.isError
+    ? "Failed to update configuration"
+    : null;
 
   if (loading) {
     return (
@@ -118,7 +116,7 @@ function App() {
       </nav>
 
       <main className="bg-card rounded-lg p-8 shadow-sm border border-border">
-        <Outlet context={{ config, updateConfig, apiBase: API_BASE }} />
+        <Outlet context={{ config, updateConfig }} />
       </main>
     </div>
   );

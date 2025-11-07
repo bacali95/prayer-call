@@ -1,44 +1,39 @@
 import React, { useState } from "react";
-import axios from "axios";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "./ui/button";
 import { Alert } from "./ui/alert";
 import { Config, ChromecastDevice } from "../types";
 import { SelectedInfo } from "./shared/selected-info";
 import { DeviceList } from "./shared/device-list";
+import { api } from "../lib/api";
 
 type ChromecastSelectorProps = {
   config: Config | null;
   updateConfig: (updates: Partial<Config>) => Promise<boolean>;
-  apiBase: string;
 };
 
 const ChromecastSelector: React.FC<ChromecastSelectorProps> = ({
   config,
   updateConfig,
-  apiBase,
 }) => {
   const [devices, setDevices] = useState<ChromecastDevice[]>([]);
-  const [scanning, setScanning] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const scanForDevices = async (): Promise<void> => {
-    setScanning(true);
-    setError(null);
-
-    try {
-      const response = await axios.get<{ devices: ChromecastDevice[] }>(
-        `${apiBase}/chromecasts/scan`,
-        {
-          params: { timeout: 60 },
-        }
-      );
-      setDevices(response.data.devices || []);
-    } catch (err) {
+  const scanForDevicesMutation = useMutation({
+    mutationFn: () => api.scanChromecasts(60),
+    onSuccess: (data) => {
+      setDevices(data.devices || []);
+      setError(null);
+    },
+    onError: (err) => {
       setError("Failed to scan for Chromecast devices");
       console.error(err);
-    } finally {
-      setScanning(false);
-    }
+    },
+  });
+
+  const scanForDevices = async (): Promise<void> => {
+    setError(null);
+    scanForDevicesMutation.mutate();
   };
 
   const selectDevice = async (device: ChromecastDevice): Promise<void> => {
@@ -61,8 +56,13 @@ const ChromecastSelector: React.FC<ChromecastSelectorProps> = ({
       )}
 
       <div className="flex flex-col gap-3">
-        <Button onClick={scanForDevices} disabled={scanning}>
-          {scanning ? "Scanning..." : "Scan for Chromecast Devices"}
+        <Button
+          onClick={scanForDevices}
+          disabled={scanForDevicesMutation.isPending}
+        >
+          {scanForDevicesMutation.isPending
+            ? "Scanning..."
+            : "Scan for Chromecast Devices"}
         </Button>
 
         {config?.chromecast && (
@@ -85,7 +85,7 @@ const ChromecastSelector: React.FC<ChromecastSelectorProps> = ({
           }}
         />
 
-        {devices.length === 0 && !scanning && (
+        {devices.length === 0 && !scanForDevicesMutation.isPending && (
           <p className="text-muted-foreground text-center mt-5">
             No Chromecast devices found. Make sure your Chromecast is on the
             same network.

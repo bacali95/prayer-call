@@ -1,26 +1,50 @@
 import React, { useState } from "react";
-import axios from "axios";
+import { useMutation } from "@tanstack/react-query";
 import { Alert } from "./ui/alert";
-import { Config, Mosque, PrayerTimes } from "../types";
+import { Config, Mosque } from "../types";
 import { SearchBox } from "./shared/search-box";
 import { SelectedInfo } from "./shared/selected-info";
 import { DeviceList } from "./shared/device-list";
+import { api } from "../lib/api";
 
 type MosqueSelectorProps = {
   config: Config | null;
   updateConfig: (updates: Partial<Config>) => Promise<boolean>;
-  apiBase: string;
 };
 
 const MosqueSelector: React.FC<MosqueSelectorProps> = ({
   config,
   updateConfig,
-  apiBase,
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [mosques, setMosques] = useState<Mosque[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const searchMosquesMutation = useMutation({
+    mutationFn: (query: string) => api.searchMosques(query),
+    onSuccess: (data) => {
+      const mosques = data.mosques || [];
+      setMosques(mosques);
+      if (mosques.length === 0) {
+        setError("No mosques found. Try a different search term.");
+      } else {
+        setError(null);
+      }
+    },
+    onError: (err: unknown) => {
+      const errorMessage =
+        (err as { message?: string }).message || "Failed to search mosques";
+      setError(errorMessage);
+      console.error("Search error:", err);
+    },
+  });
+
+  const getPrayerTimesMutation = useMutation({
+    mutationFn: (mosqueId: string) => api.getPrayerTimes(mosqueId),
+    onError: () => {
+      setError("Failed to select mosque or get prayer times");
+    },
+  });
 
   const searchMosques = async (): Promise<void> => {
     if (!searchQuery.trim()) {
@@ -28,51 +52,29 @@ const MosqueSelector: React.FC<MosqueSelectorProps> = ({
       return;
     }
 
-    setLoading(true);
     setError(null);
-
-    try {
-      const response = await axios.get<{ mosques: Mosque[] }>(
-        `${apiBase}/mosques/search`,
-        {
-          params: { q: searchQuery },
-        }
-      );
-      const mosques = response.data.mosques || [];
-      setMosques(mosques);
-      if (mosques.length === 0) {
-        setError("No mosques found. Try a different search term.");
-      }
-    } catch (err: unknown) {
-      const errorMessage =
-        (err as { response?: { data?: { error?: string }; message?: string } })
-          .response?.data?.error ||
-        (err as { message?: string }).message ||
-        "Failed to search mosques";
-      setError(errorMessage);
-      console.error("Search error:", err);
-    } finally {
-      setLoading(false);
-    }
+    searchMosquesMutation.mutate(searchQuery);
   };
 
   const selectMosque = async (mosque: Mosque): Promise<void> => {
     try {
-      // Get prayer times for this mosque
-      const prayerTimesResponse = await axios.get<PrayerTimes>(
-        `${apiBase}/mosques/${mosque.uuid || mosque.id}/prayer-times`
-      );
+      const mosqueId = mosque.uuid || mosque.id;
+      if (!mosqueId) {
+        setError("Invalid mosque ID");
+        return;
+      }
+
+      const prayerTimes = await getPrayerTimesMutation.mutateAsync(mosqueId);
 
       const success = await updateConfig({
         mosque: mosque,
-        prayer_times: prayerTimesResponse.data,
+        prayer_times: prayerTimes,
       });
 
       if (success) {
         setError(null);
       }
     } catch (err) {
-      setError("Failed to select mosque or get prayer times");
       console.error(err);
     }
   };
@@ -98,7 +100,7 @@ const MosqueSelector: React.FC<MosqueSelectorProps> = ({
           onChange={setSearchQuery}
           onSearch={searchMosques}
           placeholder="Search for a mosque..."
-          loading={loading}
+          loading={searchMosquesMutation.isPending}
         />
 
         {config?.mosque && (

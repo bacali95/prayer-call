@@ -5,18 +5,11 @@ import { Config } from "../types";
 type AppContext = {
   config: Config | null;
   updateConfig: (updates: Partial<Config>) => Promise<boolean>;
-  apiBase: string;
 };
 
 const SchedulePage = () => {
-  const { config, updateConfig, apiBase } = useOutletContext<AppContext>();
-  return (
-    <PrayerTimesDisplay
-      config={config}
-      updateConfig={updateConfig}
-      apiBase={apiBase}
-    />
-  );
+  const { config, updateConfig } = useOutletContext<AppContext>();
+  return <PrayerTimesDisplay config={config} updateConfig={updateConfig} />;
 };
 
 export default SchedulePage;
