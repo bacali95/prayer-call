@@ -27,8 +27,10 @@ export const CronJobList: React.FC<CronJobListProps> = ({
           <CronJobItem
             key={index}
             prayerName={prayerNames[job.prayer] || job.prayer}
-            schedule={job.schedule}
+            plannedTime={job.planned_time}
+            command={job.command}
             lastRun={job.last_run}
+            executedToday={job.executed_today}
             onViewLogs={() => onViewLogs(job.prayer)}
             onRemove={() => onRemove(job.prayer)}
             loadingLogs={loadingLogs}

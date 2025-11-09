@@ -125,21 +125,46 @@ class CronManager:
         self._refresh_crontab()
         
         jobs = []
+        today = datetime.now().date()
+        
         for job in self.cron:
             if job.comment and job.comment.startswith(self.job_comment_prefix):
                 prayer_key = job.comment.replace(self.job_comment_prefix, "")
-                # Get the schedule string
-                schedule_str = job.schedule
+                # Get the schedule string from job slices (minute, hour, day, month, dow)
+                schedule_parts = job.slices
+                schedule_str = " ".join(str(part) for part in schedule_parts)
+                
+                # Extract planned time from schedule (minute hour * * *)
+                planned_time = None
+                if len(schedule_parts) >= 2:
+                    try:
+                        # Convert CronSlice objects to strings first
+                        minute_str = str(schedule_parts[0])
+                        hour_str = str(schedule_parts[1])
+                        # Only parse if they're not wildcards
+                        if minute_str != "*" and hour_str != "*":
+                            minute = int(minute_str)
+                            hour = int(hour_str)
+                            planned_time = f"{hour:02d}:{minute:02d}"
+                    except (ValueError, IndexError, TypeError):
+                        pass
                 
                 # Get last run time
                 last_run = self.get_last_run_time(prayer_key)
                 last_run_str = last_run.isoformat() if last_run else None
                 
+                # Check if executed today
+                executed_today = False
+                if last_run:
+                    executed_today = last_run.date() == today
+                
                 jobs.append({
                     "prayer": prayer_key,
-                    "schedule": str(schedule_str),
+                    "schedule": schedule_str,
+                    "planned_time": planned_time,
                     "command": str(job.command),
-                    "last_run": last_run_str
+                    "last_run": last_run_str,
+                    "executed_today": executed_today
                 })
         return jobs
     

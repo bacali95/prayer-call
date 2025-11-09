@@ -42,6 +42,30 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
     },
   });
 
+  // Sort cron jobs: reschedule first, then by prayer order
+  const sortedCronJobs = React.useMemo(() => {
+    const cronJobs = cronJobsData || [];
+    const prayerOrder = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+    return [...cronJobs].sort((a, b) => {
+      // Put reschedule jobs first
+      if (a.prayer === "reschedule" && b.prayer !== "reschedule") return -1;
+      if (a.prayer !== "reschedule" && b.prayer === "reschedule") return 1;
+      if (a.prayer === "reschedule" && b.prayer === "reschedule") return 0;
+
+      // Sort by prayer order
+      const aIndex = prayerOrder.indexOf(a.prayer);
+      const bIndex = prayerOrder.indexOf(b.prayer);
+
+      // If both are in the order list, sort by index
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      // If only one is in the list, prioritize it
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+      // If neither is in the list, maintain original order
+      return 0;
+    });
+  }, [cronJobsData]);
+
   const cronJobs = cronJobsData || [];
 
   const removeCronJobMutation = useMutation({
@@ -177,7 +201,7 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
         )}
 
         <CronJobList
-          cronJobs={cronJobs}
+          cronJobs={sortedCronJobs}
           prayerNames={PRAYER_NAMES}
           onViewLogs={viewLogs}
           onRemove={removeCronJob}

@@ -32,7 +32,10 @@ export type FileInfo = {
 export type CronJob = {
   prayer: string;
   schedule: string;
+  planned_time?: string | null;
+  command?: string;
   last_run?: string | null;
+  executed_today?: boolean;
 };
 
 export type PrayerScheduleDate = {
