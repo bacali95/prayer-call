@@ -22,6 +22,10 @@ class CronManager:
         self.cron = CronTab(user=True)
         self.job_comment_prefix = "prayer-call-"
     
+    def _refresh_crontab(self):
+        """Refresh the crontab object to get the latest state from disk"""
+        self.cron = CronTab(user=True)
+    
     def _get_project_root(self) -> Path:
         """Get the absolute path to the project root directory"""
         backend_dir = Path(__file__).parent.parent
@@ -117,6 +121,9 @@ class CronManager:
     
     def get_scheduled_jobs(self) -> List[Dict]:
         """Get list of currently scheduled jobs with last run time"""
+        # Refresh crontab to get the latest state (important when reschedule job runs at 2am)
+        self._refresh_crontab()
+        
         jobs = []
         for job in self.cron:
             if job.comment and job.comment.startswith(self.job_comment_prefix):
