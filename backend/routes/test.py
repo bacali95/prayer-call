@@ -1,6 +1,7 @@
 """Test routes"""
 from flask import Blueprint, request, jsonify
 from typing import TYPE_CHECKING
+from backend.utils.network_utils import get_local_ip
 
 if TYPE_CHECKING:
     from backend.services import ChromecastScanner
@@ -28,9 +29,11 @@ def test_play():
     if not chromecast_name or not filename:
         return jsonify({"error": "chromecast_name and filename required"}), 400
     
-    # Get full URL for the file
-    base_url = request.host_url.rstrip("/")
-    media_url = f"{base_url}/api/files/{filename}"
+    # Get full URL for the file using local IP
+    local_ip = get_local_ip()
+    # Use the port from the request if available, otherwise default to 3001
+    port = request.environ.get('SERVER_PORT', '3001')
+    media_url = f"http://{local_ip}:{port}/api/files/{filename}"
     
     success = chromecast_scanner.play_media(chromecast_name, media_url, volume=volume)
     
