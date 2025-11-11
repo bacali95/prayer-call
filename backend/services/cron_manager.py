@@ -206,13 +206,12 @@ class CronManager:
         # Get project root directory (where config.json is located)
         project_root = self._get_project_root()
         config_dir = self._get_config_dir()
-        log_dir = self._get_log_dir()
         reschedule_script_path = self._get_reschedule_script_path()
         
         # Create new reschedule job at 2am daily with logging and CONFIG_DIR env var
         log_file = self._get_log_file_path("reschedule")
         job = self.cron.new(
-            command=f"cd {project_root} && CONFIG_DIR='{config_dir}' LOG_DIR='{log_dir}' /usr/local/bin/python3 {reschedule_script_path} >> {log_file} 2>&1",
+            command=f"cd {project_root} && CONFIG_DIR='{config_dir}' LOG_DIR='{self.log_dir}' /usr/local/bin/python3 {reschedule_script_path} >> {log_file} 2>&1",
             comment=reschedule_comment
         )
         job.setall("0 2 * * *")  # 2:00 AM every day
