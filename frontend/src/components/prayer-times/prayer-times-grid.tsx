@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { PrayerTimeCard } from "./prayer-time-card";
 import { Config, CronJob } from "../../types";
-import { sortByPrayerOrder } from "../../lib/utils";
+import { sortByPrayerOrder, isTimePassed, getCountdown } from "../../lib/utils";
 
 type PrayerTimesGridProps = {
   prayerTimes: Record<string, string | { [key: string | number]: string }>;
@@ -16,10 +16,57 @@ export const PrayerTimesGrid: React.FC<PrayerTimesGridProps> = ({
   cronJobs,
   prayerNames,
 }) => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every second for countdown
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Sort prayer times: reschedule first, then by prayer order
   const sortedPrayerTimes = React.useMemo(() => {
     return sortByPrayerOrder(Object.entries(prayerTimes));
   }, [prayerTimes]);
+
+  // Find the next upcoming prayer and determine which prayers have passed
+  // Note: currentTime is used to trigger recalculation every second
+  const { nextPrayer, passedPrayers } = React.useMemo(() => {
+    const passed: Set<string> = new Set();
+    let next: { prayer: string; time: string } | null = null;
+
+    for (const [prayer, time] of sortedPrayerTimes) {
+      if (!time || prayer === "reschedule") continue;
+
+      // Handle case where time is an object with day numbers as keys
+      let displayTime: string;
+      if (typeof time === "object" && time !== null && !Array.isArray(time)) {
+        const today = new Date().getDate();
+        const timeObj = time as { [key: string | number]: string };
+        displayTime =
+          timeObj[today] ||
+          timeObj[String(today)] ||
+          Object.values(timeObj)[0] ||
+          "";
+      } else {
+        displayTime = String(time);
+      }
+
+      if (!displayTime || displayTime === "N/A") continue;
+
+      if (isTimePassed(displayTime)) {
+        passed.add(prayer);
+      } else if (!next) {
+        next = { prayer, time: displayTime };
+      }
+    }
+
+    return { nextPrayer: next, passedPrayers: passed };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedPrayerTimes, currentTime]);
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
@@ -44,6 +91,10 @@ export const PrayerTimesGrid: React.FC<PrayerTimesGridProps> = ({
 
         const hasFile = config.adhan_files?.[prayer];
         const isScheduled = cronJobs.some((job) => job.prayer === prayer);
+        const isPassed = passedPrayers.has(prayer);
+        const isNext = nextPrayer?.prayer === prayer;
+        const countdown =
+          isNext && displayTime !== "N/A" ? getCountdown(displayTime) : null;
 
         return (
           <PrayerTimeCard
@@ -52,6 +103,8 @@ export const PrayerTimesGrid: React.FC<PrayerTimesGridProps> = ({
             time={displayTime}
             hasFile={!!hasFile}
             isScheduled={isScheduled}
+            isPassed={isPassed}
+            countdown={countdown}
           />
         );
       })}
