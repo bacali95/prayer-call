@@ -1,6 +1,7 @@
 import React from "react";
 import { PrayerTimeCard } from "./prayer-time-card";
 import { Config, CronJob } from "../../types";
+import { sortByPrayerOrder } from "../../lib/utils";
 
 type PrayerTimesGridProps = {
   prayerTimes: Record<string, string | { [key: string | number]: string }>;
@@ -15,9 +16,14 @@ export const PrayerTimesGrid: React.FC<PrayerTimesGridProps> = ({
   cronJobs,
   prayerNames,
 }) => {
+  // Sort prayer times: reschedule first, then by prayer order
+  const sortedPrayerTimes = React.useMemo(() => {
+    return sortByPrayerOrder(Object.entries(prayerTimes));
+  }, [prayerTimes]);
+
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
-      {Object.entries(prayerTimes).map(([prayer, time]) => {
+      {sortedPrayerTimes.map(([prayer, time]) => {
         if (!time) return null;
 
         // Handle case where time is an object with day numbers as keys

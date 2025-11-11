@@ -8,6 +8,7 @@ import { PrayerTimesGrid } from "./prayer-times/prayer-times-grid";
 import { CronJobList } from "./prayer-times/cron-job-list";
 import { LogsModal } from "./prayer-times/logs-modal";
 import { api } from "../lib/api";
+import { sortByPrayerOrder } from "../lib/utils";
 
 const PRAYER_NAMES: { [key: string]: string } = {
   fajr: "Fajr",
@@ -45,25 +46,7 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
   // Sort cron jobs: reschedule first, then by prayer order
   const sortedCronJobs = React.useMemo(() => {
     const cronJobs = cronJobsData || [];
-    const prayerOrder = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
-    return [...cronJobs].sort((a, b) => {
-      // Put reschedule jobs first
-      if (a.prayer === "reschedule" && b.prayer !== "reschedule") return -1;
-      if (a.prayer !== "reschedule" && b.prayer === "reschedule") return 1;
-      if (a.prayer === "reschedule" && b.prayer === "reschedule") return 0;
-
-      // Sort by prayer order
-      const aIndex = prayerOrder.indexOf(a.prayer);
-      const bIndex = prayerOrder.indexOf(b.prayer);
-
-      // If both are in the order list, sort by index
-      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-      // If only one is in the list, prioritize it
-      if (aIndex !== -1) return -1;
-      if (bIndex !== -1) return 1;
-      // If neither is in the list, maintain original order
-      return 0;
-    });
+    return sortByPrayerOrder(cronJobs);
   }, [cronJobsData]);
 
   const cronJobs = cronJobsData || [];
