@@ -1,5 +1,5 @@
 """Date utility functions for Gregorian and Hijri dates"""
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Dict, List, Tuple, Optional
 from hijri_converter import convert
 from zoneinfo import ZoneInfo
@@ -82,10 +82,6 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
         - (DST_end, Dec 31, False) - Standard time
     """
     if ZoneInfo is None:
-        # Fallback: approximate DST periods (Europe/North America typical pattern)
-        # DST typically: 2nd Sunday in March to 1st Sunday in November
-        import calendar
-        
         # Find 2nd Sunday in March
         march_first = date(year, 3, 1)
         march_first_weekday = march_first.weekday()
@@ -130,10 +126,15 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
     periods = []
     current_date = date(year, 1, 1)
     last_dst = None
+    period_start = date(year, 1, 1)
     
     # Check each day to find DST transitions
+    # Check at 11 PM (23:00) to determine the DST status for that day
+    # This ensures we capture the status after any transition that happened earlier in the day
+    # DST transitions typically happen at 2 AM or 3 AM, so checking at 11 PM
+    # gives us the status that applies for most of that day
     while current_date.year == year:
-        dt = datetime.combine(current_date, datetime.min.time())
+        dt = datetime.combine(current_date, datetime.min.time().replace(hour=23))
         dt_tz = dt.replace(tzinfo=tz)
         is_dst = bool(dt_tz.dst().total_seconds() > 0)
         
@@ -142,10 +143,25 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
             period_start = current_date
         
         if is_dst != last_dst:
-            # DST transition found
-            periods.append((period_start, current_date, last_dst))
+            # DST transition found - the status changed between previous day and current day
+            # The transition happens early morning (2-3 AM) on current_date
+            # So current_date should have the NEW status (after transition)
+            # We end the previous period the day before the transition
+            prev_date = current_date - timedelta(days=1)
+            if period_start <= prev_date:
+                periods.append((period_start, prev_date, last_dst))
+            # Start new period on the transition day with the new status
             period_start = current_date
             last_dst = is_dst
+        
+        # Move to next day
+        try:
+            current_date = date(current_date.year, current_date.month, current_date.day + 1)
+        except ValueError:
+            # End of month, move to next month
+            if current_date.month == 12:
+                break
+            current_date = date(current_date.year, current_date.month + 1, 1)
         
         # Move to next day
         try:
@@ -172,12 +188,10 @@ def get_dst_transitions(year: int, timezone_name: Optional[str] = None) -> List[
     """
     periods = get_dst_periods(year, timezone_name)
     transitions = []
-    
+
     for i, (start, end, is_dst) in enumerate(periods):
         if i > 0:  # Skip first period start (Jan 1)
             transitions.append(start)
-        if i < len(periods) - 1:  # Skip last period end (Dec 31)
-            transitions.append(end)
     
     return sorted(set(transitions))
 

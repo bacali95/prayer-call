@@ -42,6 +42,23 @@ const timeToMinutes = (timeStr: string): number => {
   return hours * 60 + minutes;
 };
 
+// Adjust time for DST - subtract 1 hour during DST to normalize the graph
+const adjustTimeForDST = (timeStr: string, isDST: boolean): string => {
+  if (!isDST) return timeStr;
+
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  let adjustedHours = hours - 1;
+
+  // Handle wrap-around if subtracting goes below 0
+  if (adjustedHours < 0) {
+    adjustedHours = 24 + adjustedHours;
+  }
+
+  return `${adjustedHours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
+};
+
 // Convert minutes to percentage (0% = 00:00, 100% = 23:59)
 // 23:59 = 1439 minutes
 const minutesToPercent = (minutes: number): number => {
@@ -57,6 +74,29 @@ const percentToMinutes = (percent: number): number => {
 const minutesToHours = (minutes: number): string => {
   const hours = Math.floor(minutes / 60);
   return hours.toString().padStart(2, "0") + "h";
+};
+
+// Calculate fasting duration (Fajr to Maghrib) in hours and minutes
+const calculateFastingDuration = (
+  fajrTime: string,
+  maghribTime: string
+): string => {
+  const fajr = timeToMinutes(fajrTime);
+  const maghrib = timeToMinutes(maghribTime);
+
+  // Handle case where Maghrib might be on the next day (shouldn't happen, but safety)
+  let duration = maghrib - fajr;
+  if (duration < 0) {
+    duration += 24 * 60; // Add 24 hours if negative
+  }
+
+  const hours = Math.floor(duration / 60);
+  const minutes = duration % 60;
+
+  if (minutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${minutes}m`;
 };
 
 export const PrayerTimesYearChart: React.FC<PrayerTimesYearChartProps> = ({
@@ -78,11 +118,18 @@ export const PrayerTimesYearChart: React.FC<PrayerTimesYearChartProps> = ({
   // Each area represents the interval between consecutive prayers
   const chartData = useMemo(() => {
     return data.map((item) => {
-      const fajr = timeToMinutes(item.fajr);
-      const dhuhr = timeToMinutes(item.dhuhr);
-      const asr = timeToMinutes(item.asr);
-      const maghrib = timeToMinutes(item.maghrib);
-      const isha = timeToMinutes(item.isha);
+      // Adjust times for DST to create a fluent graph (subtract 1 hour during DST)
+      const adjustedFajr = adjustTimeForDST(item.fajr, item.isDST);
+      const adjustedDhuhr = adjustTimeForDST(item.dhuhr, item.isDST);
+      const adjustedAsr = adjustTimeForDST(item.asr, item.isDST);
+      const adjustedMaghrib = adjustTimeForDST(item.maghrib, item.isDST);
+      const adjustedIsha = adjustTimeForDST(item.isha, item.isDST);
+
+      const fajr = timeToMinutes(adjustedFajr);
+      const dhuhr = timeToMinutes(adjustedDhuhr);
+      const asr = timeToMinutes(adjustedAsr);
+      const maghrib = timeToMinutes(adjustedMaghrib);
+      const isha = timeToMinutes(adjustedIsha);
 
       // Convert to percentages (0% = 00:00, 100% = 23:59)
       const fajrPercent = minutesToPercent(fajr);
@@ -171,6 +218,11 @@ export const PrayerTimesYearChart: React.FC<PrayerTimesYearChartProps> = ({
         { name: "Isha", time: data.ishaTime, color: prayerColors.isha },
       ];
 
+      const fastingDuration = calculateFastingDuration(
+        data.fajrTime || "",
+        data.maghribTime || ""
+      );
+
       return (
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
           <div className="mb-2">
@@ -186,6 +238,12 @@ export const PrayerTimesYearChart: React.FC<PrayerTimesYearChartProps> = ({
                 {prayer.time || "N/A"}
               </p>
             ))}
+          </div>
+          <div className="pt-1 mt-2 border-t border-border">
+            <p className="text-sm font-medium text-muted-foreground">
+              Fasting Duration:{" "}
+              <span className="text-foreground">{fastingDuration}</span>
+            </p>
           </div>
         </div>
       );

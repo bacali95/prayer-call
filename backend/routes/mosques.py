@@ -177,10 +177,16 @@ def get_prayer_times_year(mosque_id):
     dst_transitions = get_dst_transitions(current_year)
     
     # Create a map of dates to DST status for quick lookup
+    # Note: periods should be non-overlapping and consecutive
+    # Each date should only be assigned once
     date_to_dst = {}
     for start_date, end_date, is_dst in dst_periods:
         current = start_date
+        # Include both start and end dates (inclusive range)
         while current <= end_date and current.year == current_year:
+            # Safety check: if date is already assigned, log a warning
+            if current in date_to_dst:
+                print(f"Warning: Date {current} is being assigned DST status {is_dst} but was already {date_to_dst[current]}")
             date_to_dst[current] = is_dst
             try:
                 current = date(current.year, current.month, current.day + 1)
