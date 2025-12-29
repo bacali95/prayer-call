@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { PrayerTimeCard } from "./prayer-time-card";
-import { Config, CronJob } from "../../types";
 import { sortByPrayerOrder, isTimePassed, getCountdown } from "../../lib/utils";
 
 type PrayerTimesGridProps = {
   prayerTimes: Record<string, string | { [key: string | number]: string }>;
-  config: Config;
-  cronJobs: CronJob[];
   prayerNames: Record<string, string>;
 };
 
 export const PrayerTimesGrid: React.FC<PrayerTimesGridProps> = ({
   prayerTimes,
-  config,
-  cronJobs,
   prayerNames,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -89,8 +84,6 @@ export const PrayerTimesGrid: React.FC<PrayerTimesGridProps> = ({
           displayTime = String(time);
         }
 
-        const hasFile = config.adhan_files?.[prayer];
-        const isScheduled = cronJobs.some((job) => job.prayer === prayer);
         const isPassed = passedPrayers.has(prayer);
         const isNext = nextPrayer?.prayer === prayer;
         const countdown =
@@ -101,8 +94,6 @@ export const PrayerTimesGrid: React.FC<PrayerTimesGridProps> = ({
             key={prayer}
             prayerName={prayerNames[prayer] || prayer}
             time={displayTime}
-            hasFile={!!hasFile}
-            isScheduled={isScheduled}
             isPassed={isPassed}
             countdown={countdown}
           />

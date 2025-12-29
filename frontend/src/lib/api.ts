@@ -122,4 +122,33 @@ export const api = {
     if (!response.ok) throw new Error("Failed to load logs");
     return response.json();
   },
+
+  // Year prayer times
+  getPrayerTimesYear: async (
+    mosqueId: string
+  ): Promise<{
+    year: number;
+    data: Array<{
+      dayOfYear: number;
+      date: string;
+      fajr: string;
+      dhuhr: string;
+      asr: string;
+      maghrib: string;
+      isha: string;
+      isDST: boolean;
+      gregorian: string;
+      hijri: string;
+    }>;
+    dstTransitions: Array<{
+      dayOfYear: number;
+      date: string;
+    }>;
+  }> => {
+    const response = await fetch(
+      `${API_BASE}/mosques/${mosqueId}/prayer-times/year`
+    );
+    if (!response.ok) throw new Error("Failed to get year prayer times");
+    return response.json();
+  },
 };

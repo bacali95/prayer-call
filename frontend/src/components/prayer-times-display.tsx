@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Alert } from "./ui/alert";
@@ -7,6 +8,7 @@ import { Config } from "../types";
 import { PrayerTimesGrid } from "./prayer-times/prayer-times-grid";
 import { CronJobList } from "./prayer-times/cron-job-list";
 import { LogsModal } from "./prayer-times/logs-modal";
+import { PrayerTimesYearChart } from "./prayer-times/prayer-times-year-chart";
 import { api } from "../lib/api";
 import { sortByPrayerOrder } from "../lib/utils";
 
@@ -29,11 +31,15 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
   updateConfig,
 }) => {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [viewingLogs, setViewingLogs] = useState<{
     prayer: string;
     logs: string;
   } | null>(null);
+
+  // Check if debug mode is enabled via query parameter
+  const isDebugMode = searchParams.get("debug") !== null;
 
   const { data: cronJobsData } = useQuery({
     queryKey: ["cronJobs"],
@@ -43,13 +49,27 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
     },
   });
 
+  // Fetch year prayer times data for chart
+  const { data: yearPrayerTimesData } = useQuery({
+    queryKey: ["yearPrayerTimes", config?.mosque?.uuid || config?.mosque?.id],
+    queryFn: async () => {
+      if (!config?.mosque) {
+        throw new Error("No mosque selected");
+      }
+      const mosqueId = config.mosque.uuid || config.mosque.id;
+      if (!mosqueId) {
+        throw new Error("Invalid mosque ID");
+      }
+      return api.getPrayerTimesYear(mosqueId);
+    },
+    enabled: !!config?.mosque && (!!config.mosque.uuid || !!config.mosque.id),
+  });
+
   // Sort cron jobs: reschedule first, then by prayer order
   const sortedCronJobs = React.useMemo(() => {
     const cronJobs = cronJobsData || [];
     return sortByPrayerOrder(cronJobs);
   }, [cronJobsData]);
-
-  const cronJobs = cronJobsData || [];
 
   const removeCronJobMutation = useMutation({
     mutationFn: (prayer: string) => api.deleteCronJob(prayer),
@@ -173,8 +193,6 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
         {Object.keys(prayerTimes).length > 0 ? (
           <PrayerTimesGrid
             prayerTimes={prayerTimes}
-            config={config}
-            cronJobs={cronJobs}
             prayerNames={PRAYER_NAMES}
           />
         ) : (
@@ -183,13 +201,24 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
           </Alert>
         )}
 
-        <CronJobList
-          cronJobs={sortedCronJobs}
-          prayerNames={PRAYER_NAMES}
-          onViewLogs={viewLogs}
-          onRemove={removeCronJob}
-          loadingLogs={getLogsMutation.isPending}
-        />
+        {yearPrayerTimesData && yearPrayerTimesData.data && (
+          <PrayerTimesYearChart
+            data={yearPrayerTimesData.data}
+            year={yearPrayerTimesData.year}
+            dstTransitions={yearPrayerTimesData.dstTransitions || []}
+          />
+        )}
+
+        {isDebugMode && (
+          <CronJobList
+            cronJobs={sortedCronJobs}
+            prayerNames={PRAYER_NAMES}
+            config={config}
+            onViewLogs={viewLogs}
+            onRemove={removeCronJob}
+            loadingLogs={getLogsMutation.isPending}
+          />
+        )}
       </div>
 
       {viewingLogs && (

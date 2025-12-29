@@ -4,6 +4,7 @@ import { Alert } from "./components/ui/alert";
 import { Config } from "./types";
 import { api } from "./lib/api";
 import { ThemeToggle } from "./components/theme-toggle";
+import { DebugToggle } from "./components/debug-toggle";
 
 function App() {
   const queryClient = useQueryClient();
@@ -60,7 +61,8 @@ function App() {
         <p className="text-muted-foreground">
           Schedule and play adhan on your Chromecast
         </p>
-        <div className="absolute top-5 right-5">
+        <div className="absolute top-1/2 -translate-y-1/2 right-5 flex items-center gap-1">
+          <DebugToggle />
           <ThemeToggle />
         </div>
       </header>

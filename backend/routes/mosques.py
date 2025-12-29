@@ -148,3 +148,104 @@ def explore_calendar(mosque_id):
     
     return jsonify(info)
 
+
+@mosques_bp.route("/<mosque_id>/prayer-times/year", methods=["GET"])
+def get_prayer_times_year(mosque_id):
+    """Get prayer times for the entire current year"""
+    from datetime import date
+    import calendar as cal_module
+    from backend.utils.date_utils import get_dst_periods, get_dst_transitions, format_date_both_calendars
+    
+    # Get current year
+    current_year = datetime.now().year
+    year_start = date(current_year, 1, 1)
+    
+    # Fetch prayer times for the year (API returns full calendar)
+    prayer_times = mawaqit_client.get_prayer_times(mosque_id, year_start.strftime("%Y-%m-%d"))
+    
+    if not prayer_times or "calendar" not in prayer_times:
+        return jsonify({"error": "Failed to get prayer times calendar"}), 500
+    
+    calendar_data = prayer_times["calendar"]
+    if not isinstance(calendar_data, list) or len(calendar_data) != 12:
+        return jsonify({"error": "Invalid calendar structure"}), 500
+    
+    # Get DST periods for the year
+    # Note: We don't have the mosque's timezone, so we'll use a default
+    # The API times are already in local time (which includes DST adjustments)
+    dst_periods = get_dst_periods(current_year)
+    dst_transitions = get_dst_transitions(current_year)
+    
+    # Create a map of dates to DST status for quick lookup
+    date_to_dst = {}
+    for start_date, end_date, is_dst in dst_periods:
+        current = start_date
+        while current <= end_date and current.year == current_year:
+            date_to_dst[current] = is_dst
+            try:
+                current = date(current.year, current.month, current.day + 1)
+            except ValueError:
+                if current.month == 12:
+                    break
+                current = date(current.year, current.month + 1, 1)
+    
+    # Transform calendar to array of daily prayer times
+    # Each entry: { dayOfYear: int, date: "YYYY-MM-DD", fajr: "HH:MM", dhuhr: "HH:MM", asr: "HH:MM", maghrib: "HH:MM", isha: "HH:MM", isDST: bool }
+    year_data = []
+    day_of_year = 1
+    
+    for month_idx, month_data in enumerate(calendar_data):
+        if not isinstance(month_data, dict):
+            continue
+        
+        month_num = month_idx + 1
+        # Get number of days in this month
+        days_in_month = cal_module.monthrange(current_year, month_num)[1]
+        
+        for day_num in range(1, days_in_month + 1):
+            day_key = str(day_num)
+            if day_key not in month_data:
+                continue
+            
+            day_times = month_data[day_key]
+            if not isinstance(day_times, list) or len(day_times) < 6:
+                continue
+            
+            # Map: [Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha]
+            current_date = date(current_year, month_num, day_num)
+            is_dst = date_to_dst.get(current_date, False)
+            
+            # Format date in both calendars
+            date_formats = format_date_both_calendars(current_date)
+            
+            year_data.append({
+                "dayOfYear": day_of_year,
+                "date": current_date.strftime("%Y-%m-%d"),
+                "fajr": day_times[0],
+                "dhuhr": day_times[2],
+                "asr": day_times[3],
+                "maghrib": day_times[4],
+                "isha": day_times[5],
+                "isDST": is_dst,
+                "gregorian": date_formats["gregorian"],
+                "hijri": date_formats["hijri"]
+            })
+            day_of_year += 1
+    
+    # Convert DST transitions to day of year for frontend
+    dst_transition_days = []
+    for transition_date in dst_transitions:
+        # Calculate day of year
+        year_start = date(current_year, 1, 1)
+        day_of_year = (transition_date - year_start).days + 1
+        dst_transition_days.append({
+            "dayOfYear": day_of_year,
+            "date": transition_date.strftime("%Y-%m-%d")
+        })
+    
+    return jsonify({
+        "year": current_year,
+        "data": year_data,
+        "dstTransitions": dst_transition_days
+    })
+

@@ -8,6 +8,7 @@ type CronJobItemProps = {
   command?: string;
   lastRun: string | null | undefined;
   executedToday?: boolean;
+  hasFile?: boolean;
   onViewLogs: () => void;
   onRemove: () => void;
   loadingLogs?: boolean;
@@ -19,6 +20,7 @@ export const CronJobItem: React.FC<CronJobItemProps> = ({
   command,
   lastRun,
   executedToday = false,
+  hasFile = false,
   onViewLogs,
   onRemove,
   loadingLogs = false,
@@ -56,13 +58,21 @@ export const CronJobItem: React.FC<CronJobItemProps> = ({
     <Card className="p-4 text-sm">
       <div className="flex flex-col justify-between items-start gap-3">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <strong className="text-base">{prayerName}</strong>
             {executedToday && (
               <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full font-medium">
                 ✓ Executed Today
               </span>
             )}
+            {hasFile && (
+              <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full font-medium">
+                ✓ File assigned
+              </span>
+            )}
+            <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full font-medium">
+              ✓ Scheduled
+            </span>
           </div>
 
           <div className="space-y-1.5 text-xs">
