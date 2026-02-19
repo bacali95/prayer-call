@@ -35,6 +35,8 @@ class MawaqitClient:
         except Exception as e:
             logger.error(f"Error searching mosques: {e.message}")
             return []
+        finally:
+            await client.close()
     
     async def get_prayer_times(self, mosque_id: str) -> Optional[Dict]:
         """Get prayer times for a mosque"""
@@ -53,4 +55,6 @@ class MawaqitClient:
         except Exception as e:
             logger.error(f"Error getting prayer times: {e}")
             return None
+        finally:
+            await client.close()
 
