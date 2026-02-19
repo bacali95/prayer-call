@@ -1,8 +1,9 @@
-flask==3.1.2
+flask[async]==3.1.2
 flask-cors==6.0.1
 pychromecast==13.1.0
 requests==2.32.5
 python-crontab==3.3.0
 python-dotenv==1.2.1
 hijri-converter==2.3.2.post1
+mawaqit==1.0.8
 

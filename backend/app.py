@@ -1,7 +1,9 @@
 """Flask backend for Prayer Call App"""
+import asyncio
+import os
+
 from flask import Flask, send_from_directory
 from flask_cors import CORS
-import os
 
 # Import services and managers
 from backend.config import ConfigManager
@@ -24,7 +26,7 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-def create_app():
+async def create_app():
     """Create and configure Flask application"""
     app = Flask(__name__, static_folder=STATIC_FOLDER if PRODUCTION else None)
     CORS(app)
@@ -72,7 +74,7 @@ def create_app():
             print(f"Mosque and chromecast configured. Fetching prayer times for today...")
             try:
                 # Fetch prayer times for today
-                prayer_times_data = mawaqit_client.get_prayer_times(mosque["uuid"])
+                prayer_times_data = await mawaqit_client.get_prayer_times(mosque["uuid"])
                 if prayer_times_data:
                     from backend.utils import transform_prayer_times
                     transformed_times = transform_prayer_times(prayer_times_data)
@@ -106,8 +108,8 @@ def create_app():
     return app
 
 
-# Create app instance
-app = create_app()
+# Create app instance (create_app is async due to Mawaqit API call on startup)
+app = asyncio.run(create_app())
 
 
 if __name__ == "__main__":

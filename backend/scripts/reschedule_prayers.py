@@ -10,7 +10,7 @@ from backend.services import MawaqitClient, CronManager
 from backend.utils import transform_prayer_times, get_prayer_schedule_date
 
 
-def main():
+async def main():
     """Reschedule prayers by fetching new times and updating cron jobs"""
     print("Starting prayer reschedule at 2am...")
     
@@ -38,7 +38,7 @@ def main():
     
     # Fetch prayer times from API
     mawaqit_client = MawaqitClient()
-    prayer_times_data = mawaqit_client.get_prayer_times(mosque_id)
+    prayer_times_data = await mawaqit_client.get_prayer_times(mosque_id)
     
     if not prayer_times_data:
         print("Failed to fetch prayer times from API. Skipping reschedule.")

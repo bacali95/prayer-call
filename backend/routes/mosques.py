@@ -25,13 +25,13 @@ def init_services(mawaqit: 'MawaqitClient', cm: 'ConfigManager', cron_mgr: 'Cron
 
 
 @mosques_bp.route("/search", methods=["GET"])
-def search_mosques():
+async def search_mosques():
     """Search for mosques"""
     query = request.args.get("q", "")
     if not query:
         return jsonify({"error": "Query parameter 'q' is required"}), 400
     
-    mosques = mawaqit_client.search_mosques(query)
+    mosques = await mawaqit_client.search_mosques(query)
     # Transform API response to match frontend Mosque type
     # API returns 'localisation' but frontend expects 'address'
     transformed_mosques = []
@@ -48,10 +48,9 @@ def search_mosques():
 
 
 @mosques_bp.route("/<mosque_id>/prayer-times", methods=["GET"])
-def get_prayer_times(mosque_id):
+async def get_prayer_times(mosque_id):
     """Get prayer times for a mosque"""
-    date = request.args.get("date")
-    prayer_times = mawaqit_client.get_prayer_times(mosque_id, date)
+    prayer_times = await mawaqit_client.get_prayer_times(mosque_id)
     
     if prayer_times:
         # Log calendar structure for exploration
@@ -97,10 +96,9 @@ def get_prayer_times(mosque_id):
 
 
 @mosques_bp.route("/<mosque_id>/calendar/explore", methods=["GET"])
-def explore_calendar(mosque_id):
+async def explore_calendar(mosque_id):
     """Explore the calendar structure for debugging"""
-    date = request.args.get("date")
-    prayer_times = mawaqit_client.get_prayer_times(mosque_id, date)
+    prayer_times = await mawaqit_client.get_prayer_times(mosque_id)
     
     if not prayer_times or "calendar" not in prayer_times:
         return jsonify({
@@ -150,7 +148,7 @@ def explore_calendar(mosque_id):
 
 
 @mosques_bp.route("/<mosque_id>/prayer-times/year", methods=["GET"])
-def get_prayer_times_year(mosque_id):
+async def get_prayer_times_year(mosque_id):
     """Get prayer times for the entire current year"""
     from datetime import date
     import calendar as cal_module
@@ -161,7 +159,7 @@ def get_prayer_times_year(mosque_id):
     year_start = date(current_year, 1, 1)
     
     # Fetch prayer times for the year (API returns full calendar)
-    prayer_times = mawaqit_client.get_prayer_times(mosque_id, year_start.strftime("%Y-%m-%d"))
+    prayer_times = await mawaqit_client.get_prayer_times(mosque_id)
     
     if not prayer_times or "calendar" not in prayer_times:
         return jsonify({"error": "Failed to get prayer times calendar"}), 500
