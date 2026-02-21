@@ -1,5 +1,6 @@
 """Script to reschedule prayers (called by cron job at 2am daily)"""
 import sys
+import asyncio
 from pathlib import Path
 
 # Add parent directories to path to import backend modules
@@ -74,5 +75,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 
