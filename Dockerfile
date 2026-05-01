@@ -1,5 +1,5 @@
 # Multi-stage build for Prayer Call App
-FROM bun:1.3.13-alpine AS frontend-builder
+FROM oven/bun:1.3.13-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
