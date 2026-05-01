@@ -31,7 +31,7 @@ export const api = {
   // Mosques
   searchMosques: async (query: string): Promise<{ mosques: Mosque[] }> => {
     const response = await fetch(
-      `${API_BASE}/mosques/search?${new URLSearchParams({ q: query })}`
+      `${API_BASE}/mosques/search?${new URLSearchParams({ q: query })}`,
     );
     if (!response.ok) throw new Error("Failed to search mosques");
     return response.json();
@@ -39,7 +39,7 @@ export const api = {
 
   getPrayerTimes: async (mosqueId: string): Promise<PrayerTimes> => {
     const response = await fetch(
-      `${API_BASE}/mosques/${mosqueId}/prayer-times`
+      `${API_BASE}/mosques/${mosqueId}/prayer-times`,
     );
     if (!response.ok) throw new Error("Failed to get prayer times");
     return response.json();
@@ -47,14 +47,14 @@ export const api = {
 
   // Chromecast
   scanChromecasts: async (
-    timeout: number = 60
+    timeout: number = 10,
   ): Promise<{
     devices: ChromecastDevice[];
   }> => {
     const response = await fetch(
       `${API_BASE}/chromecasts/scan?${new URLSearchParams({
         timeout: timeout.toString(),
-      })}`
+      })}`,
     );
     if (!response.ok) throw new Error("Failed to scan for Chromecast devices");
     return response.json();
@@ -113,7 +113,7 @@ export const api = {
   },
 
   getCronJobLogs: async (
-    prayer: string
+    prayer: string,
   ): Promise<{
     logs: string;
     prayer: string;
@@ -125,7 +125,7 @@ export const api = {
 
   // Year prayer times
   getPrayerTimesYear: async (
-    mosqueId: string
+    mosqueId: string,
   ): Promise<{
     year: number;
     data: Array<{
@@ -146,7 +146,7 @@ export const api = {
     }>;
   }> => {
     const response = await fetch(
-      `${API_BASE}/mosques/${mosqueId}/prayer-times/year`
+      `${API_BASE}/mosques/${mosqueId}/prayer-times/year`,
     );
     if (!response.ok) throw new Error("Failed to get year prayer times");
     return response.json();

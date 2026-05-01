@@ -15,7 +15,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({
 }) => {
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-1000"
       onClick={onClose}
     >
       <Card
@@ -28,7 +28,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({
             Close
           </Button>
         </div>
-        <div className="bg-[#1e1e1e] text-[#d4d4d4] p-4 rounded font-mono text-xs overflow-auto max-h-[500px] whitespace-pre-wrap break-words">
+        <div className="bg-[#1e1e1e] text-[#d4d4d4] p-4 rounded font-mono text-xs overflow-auto max-h-[500px] whitespace-pre-wrap wrap-break-word">
           {logs || "No logs available"}
         </div>
       </Card>

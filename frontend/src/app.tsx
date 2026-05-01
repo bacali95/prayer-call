@@ -38,8 +38,8 @@ function App() {
   const error = queryError
     ? "Failed to load configuration"
     : updateConfigMutation.isError
-    ? "Failed to update configuration"
-    : null;
+      ? "Failed to update configuration"
+      : null;
 
   if (loading) {
     return (
@@ -53,7 +53,7 @@ function App() {
 
   return (
     <div className="max-w-[1200px] mx-auto p-5">
-      <header className="text-center mb-5 p-5 bg-card rounded-lg shadow-sm border border-border relative">
+      <header className="text-center mb-5 p-5 bg-card rounded-lg shadow-xs border border-border relative">
         <div className="absolute top-1/2 left-5 w-14 h-14 -translate-y-1/2">
           <img className="rounded-md" src="/logo.jpg" alt="Prayer Call App" />
         </div>
@@ -73,7 +73,7 @@ function App() {
         </Alert>
       )}
 
-      <nav className="flex gap-2.5 mb-5 flex-wrap bg-card p-2.5 rounded-lg shadow-sm border border-border">
+      <nav className="flex gap-2.5 mb-5 flex-wrap bg-card p-2.5 rounded-lg shadow-xs border border-border">
         <NavLink
           to="/schedule"
           className={({ isActive }) =>
@@ -124,7 +124,7 @@ function App() {
         </NavLink>
       </nav>
 
-      <main className="bg-card rounded-lg p-8 shadow-sm border border-border">
+      <main className="bg-card rounded-lg p-8 shadow-xs border border-border">
         <Outlet context={{ config, updateConfig }} />
       </main>
     </div>

@@ -58,13 +58,13 @@ def upload_file():
 @files_bp.route("/<filename>", methods=["GET"])
 def serve_file(filename):
     """Serve uploaded files"""
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    return send_from_directory(UPLOAD_FOLDER, secure_filename(filename))
 
 
 @files_bp.route("/<filename>", methods=["DELETE"])
 def delete_file_route(filename):
     """Delete an uploaded file"""
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    filepath = os.path.join(UPLOAD_FOLDER, secure_filename(filename))
     if os.path.exists(filepath):
         os.remove(filepath)
         return jsonify({"message": "File deleted successfully"})

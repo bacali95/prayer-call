@@ -69,11 +69,11 @@ cd frontend
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     echo "Installing Node dependencies..."
-    yarn install
+    bun install
 fi
 
 # Start React app (using dev script from package.json)
-yarn dev &
+bun run dev &
 FRONTEND_PID=$!
 
 # Wait a bit for frontend to start

@@ -14,13 +14,14 @@ class MawaqitClient:
 
     async def search_mosques(self, query: str) -> List[Dict]:
         """Search for mosques by name or location"""
+        client = None
         try:
             config = self.config_manager.load()
             client = AsyncMawaqitClient(
-                username=config.get("mawaqit").get("username"),
-                password=config.get("mawaqit").get("password")
+                username=config.get("mawaqit", {}).get("username"),
+                password=config.get("mawaqit", {}).get("password")
             )
-            
+
             await client.get_api_token()
 
             data = await client.fetch_mosques_by_keyword(query)
@@ -33,28 +34,31 @@ class MawaqitClient:
             logger.error(f"Bad credentials: {e}")
             return []
         except Exception as e:
-            logger.error(f"Error searching mosques: {e.message}")
+            logger.error(f"Error searching mosques: {e}")
             return []
         finally:
-            await client.close()
+            if client:
+                await client.close()
     
     async def get_prayer_times(self, mosque_id: str) -> Optional[Dict]:
         """Get prayer times for a mosque"""
+        client = None
         try:
             config = self.config_manager.load()
             client = AsyncMawaqitClient(
-                username=config.get("mawaqit").get("username"),
-                password=config.get("mawaqit").get("password"),
+                username=config.get("mawaqit", {}).get("username"),
+                password=config.get("mawaqit", {}).get("password"),
                 mosque=mosque_id
             )
             await client.get_api_token()
 
             data = await client.fetch_prayer_times()
-            
+
             return data
         except Exception as e:
             logger.error(f"Error getting prayer times: {e}")
             return None
         finally:
-            await client.close()
+            if client:
+                await client.close()
 

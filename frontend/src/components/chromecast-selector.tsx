@@ -20,7 +20,7 @@ const ChromecastSelector: React.FC<ChromecastSelectorProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const scanForDevicesMutation = useMutation({
-    mutationFn: () => api.scanChromecasts(60),
+    mutationFn: () => api.scanChromecasts(10),
     onSuccess: (data) => {
       setDevices(data.devices || []);
       setError(null);

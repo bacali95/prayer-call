@@ -13,4 +13,4 @@ uploads/
 .DS_Store
 *.log
 config.json
-
+frontend/build/

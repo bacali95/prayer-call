@@ -22,6 +22,8 @@ def init_scanner(scanner: 'ChromecastScanner'):
 def test_play():
     """Test playing adhan on Chromecast"""
     data = request.json
+    if data is None:
+        return jsonify({"error": "Request body required"}), 400
     chromecast_name = data.get("chromecast_name")
     filename = data.get("filename")
     volume = data.get("volume")

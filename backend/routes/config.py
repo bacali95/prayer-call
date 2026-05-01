@@ -31,6 +31,8 @@ def get_config():
 def update_config():
     """Update configuration"""
     data = request.json
+    if data is None:
+        return jsonify({"error": "Request body required"}), 400
     config = config_manager.load()
     
     # Prepare updates

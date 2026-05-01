@@ -1,5 +1,5 @@
 # Multi-stage build for Prayer Call App
-FROM node:24-alpine AS frontend-builder
+FROM bun:1.3.13-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -7,13 +7,13 @@ WORKDIR /app/frontend
 COPY frontend/ ./
 
 # Install dependencies
-RUN yarn install
+RUN bun install
 
 # Build React app
-RUN yarn build
+RUN bun run build
 
 # Python backend stage
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 

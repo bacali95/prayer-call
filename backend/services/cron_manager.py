@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from pathlib import Path
 from datetime import datetime
 import os
+import sys
 
 from backend.config import ConfigManager
 
@@ -105,7 +106,7 @@ class CronManager:
                 # Create cron job with logging and CONFIG_DIR env var
                 log_file = self._get_log_file_path(prayer_key)
                 job = self.cron.new(
-                    command=f"cd {project_root} && CONFIG_DIR='{config_dir}' /usr/local/bin/python3 {script_path} '{chromecast_name}' '{prayer_key}' > {log_file} 2>&1",
+                    command=f"cd {project_root} && CONFIG_DIR='{config_dir}' {sys.executable} {script_path} '{chromecast_name}' '{prayer_key}' > {log_file} 2>&1",
                     comment=f"{self.job_comment_prefix}{prayer_key}"
                 )
                 job.setall(f"{minute} {hour} * * *")
@@ -211,7 +212,7 @@ class CronManager:
         # Create new reschedule job at 2am daily with logging and CONFIG_DIR env var
         log_file = self._get_log_file_path("reschedule")
         job = self.cron.new(
-            command=f"cd {project_root} && CONFIG_DIR='{config_dir}' LOG_DIR='{self.log_dir}' /usr/local/bin/python3 {reschedule_script_path} > {log_file} 2>&1",
+            command=f"cd {project_root} && CONFIG_DIR='{config_dir}' LOG_DIR='{self.log_dir}' {sys.executable} {reschedule_script_path} > {log_file} 2>&1",
             comment=reschedule_comment
         )
         job.setall("0 2 * * *")  # 2:00 AM every day

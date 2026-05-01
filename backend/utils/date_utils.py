@@ -1,7 +1,7 @@
 """Date utility functions for Gregorian and Hijri dates"""
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Tuple, Optional
-from hijri_converter import convert
+from hijridate import convert
 from zoneinfo import ZoneInfo
 
 
@@ -81,36 +81,9 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
         - (DST_start, DST_end, True) - DST period
         - (DST_end, Dec 31, False) - Standard time
     """
-    if ZoneInfo is None:
-        # Find 2nd Sunday in March
-        march_first = date(year, 3, 1)
-        march_first_weekday = march_first.weekday()
-        # Sunday is 6, so days to add to get to first Sunday
-        days_to_first_sunday = (6 - march_first_weekday) % 7
-        if days_to_first_sunday == 0 and march_first_weekday != 6:
-            days_to_first_sunday = 7
-        first_sunday = march_first.replace(day=1 + days_to_first_sunday)
-        dst_start = first_sunday.replace(day=first_sunday.day + 7)  # 2nd Sunday
-        
-        # Find 1st Sunday in November
-        nov_first = date(year, 11, 1)
-        nov_first_weekday = nov_first.weekday()
-        days_to_first_sunday = (6 - nov_first_weekday) % 7
-        if days_to_first_sunday == 0 and nov_first_weekday != 6:
-            days_to_first_sunday = 7
-        dst_end = nov_first.replace(day=1 + days_to_first_sunday)
-        
-        periods = [
-            (date(year, 1, 1), dst_start, False),
-            (dst_start, dst_end, True),
-            (dst_end, date(year, 12, 31), False)
-        ]
-        return periods
-    
-    # Use zoneinfo for accurate DST detection
     if timezone_name is None:
-        # Default to Europe/Paris (common for many mosques)
-        timezone_name = "Europe/Paris"
+        # Default to Europe/Amsterdam (common for many mosques)
+        timezone_name = "Europe/Amsterdam"
     
     try:
         tz = ZoneInfo(timezone_name)
@@ -121,7 +94,7 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
             tz_name = time.tzname[0] if time.daylight else time.tzname[1]
             tz = ZoneInfo(tz_name)
         except Exception:
-            tz = ZoneInfo("Europe/Paris")
+            tz = ZoneInfo("Europe/Amsterdam")
     
     periods = []
     current_date = date(year, 1, 1)
@@ -154,23 +127,7 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
             period_start = current_date
             last_dst = is_dst
         
-        # Move to next day
-        try:
-            current_date = date(current_date.year, current_date.month, current_date.day + 1)
-        except ValueError:
-            # End of month, move to next month
-            if current_date.month == 12:
-                break
-            current_date = date(current_date.year, current_date.month + 1, 1)
-        
-        # Move to next day
-        try:
-            current_date = date(current_date.year, current_date.month, current_date.day + 1)
-        except ValueError:
-            # End of month, move to next month
-            if current_date.month == 12:
-                break
-            current_date = date(current_date.year, current_date.month + 1, 1)
+        current_date += timedelta(days=1)
     
     # Add final period
     if period_start:
