@@ -11,17 +11,12 @@ from backend.config import ConfigManager
 
 class CronManager:
     def __init__(self, log_dir: str = None):
-        """
-        Initialize CronManager
-        
-        Args:
-            log_dir: Directory to store log files (defaults to /var/log)
-        """
         if log_dir is None:
             log_dir = os.environ.get("LOG_DIR", "/var/log")
         self.log_dir = log_dir
         self.cron = CronTab(user=True)
         self.job_comment_prefix = "prayer-call-"
+        self._config_dir = ConfigManager().config_dir
     
     def _refresh_crontab(self):
         """Refresh the crontab object to get the latest state from disk"""
@@ -40,8 +35,7 @@ class CronManager:
         return str(script_path.absolute())
 
     def _get_config_dir(self) -> str:
-        """Get the config directory from the ConfigManager"""
-        return ConfigManager().config_dir
+        return self._config_dir
     
     def _get_log_file_path(self, prayer_key: str) -> str:
         """Get the log file path for a prayer job"""

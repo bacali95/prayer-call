@@ -2,7 +2,10 @@
 from flask import Blueprint, request, jsonify
 from typing import TYPE_CHECKING
 from backend.utils import transform_prayer_times, get_prayer_schedule_date
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from backend.services import MawaqitClient, CronManager
@@ -53,41 +56,24 @@ async def get_prayer_times(mosque_id):
     prayer_times = await mawaqit_client.get_prayer_times(mosque_id)
     
     if prayer_times:
-        # Log calendar structure for exploration
-        if "calendar" in prayer_times and prayer_times["calendar"]:
-            calendar = prayer_times["calendar"]
-            print(f"\n📅 Calendar found: {len(calendar)} months")
-            if len(calendar) > 0:
-                first_month = calendar[0]
-                print(f"   First month has {len(first_month)} days")
-                if "1" in first_month:
-                    print(f"   Day 1 times: {first_month['1']}")
-                    print(f"   Structure: [Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha]")
-        
         # Transform prayer times to simple string format
         transformed_times = transform_prayer_times(prayer_times)
-        
-        # Log which format was used
+
         if "calendar" in prayer_times and prayer_times["calendar"]:
-            print(f"✅ Using calendar format - extracted: {transformed_times}")
+            logger.info("Using calendar format - extracted: %s", transformed_times)
         else:
-            print(f"⚠️  Using fallback format - extracted: {transformed_times}")
-        
-        # Get current date in both formats
-        schedule_date = get_prayer_schedule_date()
-        
-        # Update config with transformed prayer times and schedule date
-        config_manager.update({
+            logger.warning("Using fallback format - extracted: %s", transformed_times)
+
+        # Update config and reuse the returned value to avoid a redundant load()
+        updated_config = config_manager.update({
             "prayer_times": transformed_times,
-            "prayer_schedule_date": schedule_date
+            "prayer_schedule_date": get_prayer_schedule_date()
         })
-        
-        # Update cron jobs if chromecast is set
-        config = config_manager.load()
-        if config.get("chromecast"):
+
+        if updated_config.get("chromecast"):
             cron_manager.schedule_prayers(
                 transformed_times,
-                config["chromecast"]["name"]
+                updated_config["chromecast"]["name"]
             )
         
         return jsonify(transformed_times)
@@ -180,18 +166,11 @@ async def get_prayer_times_year(mosque_id):
     date_to_dst = {}
     for start_date, end_date, is_dst in dst_periods:
         current = start_date
-        # Include both start and end dates (inclusive range)
         while current <= end_date and current.year == current_year:
-            # Safety check: if date is already assigned, log a warning
             if current in date_to_dst:
-                print(f"Warning: Date {current} is being assigned DST status {is_dst} but was already {date_to_dst[current]}")
+                logger.warning("Date %s assigned DST=%s but already had %s", current, is_dst, date_to_dst[current])
             date_to_dst[current] = is_dst
-            try:
-                current = date(current.year, current.month, current.day + 1)
-            except ValueError:
-                if current.month == 12:
-                    break
-                current = date(current.year, current.month + 1, 1)
+            current += timedelta(days=1)
     
     # Transform calendar to array of daily prayer times
     # Each entry: { dayOfYear: int, date: "YYYY-MM-DD", fajr: "HH:MM", dhuhr: "HH:MM", asr: "HH:MM", maghrib: "HH:MM", isha: "HH:MM", isDST: bool }
@@ -239,11 +218,9 @@ async def get_prayer_times_year(mosque_id):
     # Convert DST transitions to day of year for frontend
     dst_transition_days = []
     for transition_date in dst_transitions:
-        # Calculate day of year
-        year_start = date(current_year, 1, 1)
-        day_of_year = (transition_date - year_start).days + 1
+        transition_day_of_year = (transition_date - year_start).days + 1
         dst_transition_days.append({
-            "dayOfYear": day_of_year,
+            "dayOfYear": transition_day_of_year,
             "date": transition_date.strftime("%Y-%m-%d")
         })
     

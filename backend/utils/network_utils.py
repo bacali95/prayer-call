@@ -1,7 +1,9 @@
 """Network utility functions"""
 import socket
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1)
 def get_local_ip():
     """Get the local IP address"""
     try:
