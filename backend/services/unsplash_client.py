@@ -39,7 +39,7 @@ class UnsplashClient:
                 timeout=10,
             )
             if res.ok:
-                return [p["urls"]["regular"] for p in res.json()]
+                return [p["urls"]["raw"] for p in res.json()]
         except Exception as exc:
             logger.warning("Page fetch failed — collection=%s page=%d: %s", collection_id, page, exc)
         return []
