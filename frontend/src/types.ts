@@ -50,4 +50,5 @@ export type Config = {
   adhan_volumes?: AdhanVolumes;
   prayer_times?: PrayerTimes;
   prayer_schedule_date?: PrayerScheduleDate;
+  unsplash_access_key?: string;
 };

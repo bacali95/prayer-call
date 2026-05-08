@@ -49,7 +49,10 @@ def update_config():
     
     if "adhan_volumes" in data:
         updates["adhan_volumes"] = data["adhan_volumes"]
-    
+
+    if "unsplash_access_key" in data:
+        updates["unsplash_access_key"] = data["unsplash_access_key"]
+
     if "prayer_times" in data:
         # Transform prayer times to simple string format if needed
         updates["prayer_times"] = transform_prayer_times(data["prayer_times"])

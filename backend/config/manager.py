@@ -41,7 +41,8 @@ class ConfigManager:
                 "isha": None
             },
             "prayer_times": {},
-            "prayer_schedule_date": None
+            "prayer_schedule_date": None,
+            "unsplash_access_key": None,
         }
     
     def load(self) -> Dict[str, Any]:
@@ -95,7 +96,10 @@ class ConfigManager:
         
         if "prayer_schedule_date" in updates:
             config["prayer_schedule_date"] = updates["prayer_schedule_date"]
-        
+
+        if "unsplash_access_key" in updates:
+            config["unsplash_access_key"] = updates["unsplash_access_key"]
+
         self.save(config)
         return config
 

@@ -7,7 +7,7 @@ from flask_cors import CORS
 
 # Import services and managers
 from backend.config import ConfigManager
-from backend.services import ChromecastScanner, CronManager, MawaqitClient
+from backend.services import ChromecastScanner, CronManager, MawaqitClient, UnsplashClient
 
 # Import route blueprints
 from backend.routes import (
@@ -36,6 +36,7 @@ async def create_app():
     chromecast_scanner = ChromecastScanner()
     cron_manager = CronManager()
     mawaqit_client = MawaqitClient()
+    unsplash_client = UnsplashClient(config_manager)
     
     # Initialize route blueprints with dependencies
     from backend.routes.config import init_managers as init_config_managers
@@ -44,13 +45,15 @@ async def create_app():
     from backend.routes.files import init_files
     from backend.routes.cron import init_manager as init_cron_manager
     from backend.routes.test import init_scanner as init_test_scanner
-    
+    from backend.routes.screensaver import init_client as init_screensaver_client
+
     init_config_managers(config_manager, cron_manager)
     init_mosques_services(mawaqit_client, config_manager, cron_manager)
     init_chromecasts_scanner(chromecast_scanner)
     init_files(UPLOAD_FOLDER)
     init_cron_manager(cron_manager)
     init_test_scanner(chromecast_scanner)
+    init_screensaver_client(unsplash_client)
     
     # Register blueprints
     app.register_blueprint(config_bp)
