@@ -203,11 +203,24 @@ export default function ScreensaverPage() {
     refetchRef.current = refetchSlides;
   }, [refetchSlides]);
 
+  const [canvas, setCanvas] = useState({ scale: 1, h: 1000 });
   const [rawSlide, setRawSlide] = useState(0);
   const [pipEpoch, setPipEpoch] = useState(0);
   const [now, setNow] = useState(new Date());
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [quoteVisible, setQuoteVisible] = useState(true);
+
+  // width fixed at 1600; height derived from actual viewport ratio → fills any screen
+  useEffect(() => {
+    const compute = () => {
+      const scale = window.innerWidth / 1600;
+      const h = Math.round(window.innerHeight / scale);
+      setCanvas({ scale, h });
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, []);
 
   // derived carousel position
   const slideIdx = activeSlides.length > 0 ? rawSlide % activeSlides.length : 0;
@@ -317,247 +330,255 @@ export default function ScreensaverPage() {
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className="relative w-dvw h-dvh overflow-hidden bg-[#100e0a] text-[#f5efe2] antialiased [text-rendering:optimizeLegibility]"
-      style={OUTFIT}
-    >
-      {/* background carousel */}
-      <div className="absolute inset-0">
-        {activeSlides.map((url, i) => (
-          <div
-            key={url}
-            className={`ss-slide absolute inset-0 bg-cover bg-center${i === slideIdx ? " is-active" : ""}`}
-            style={{ backgroundImage: `url("${url}")` }}
-          />
-        ))}
-      </div>
-
-      {/* vignette */}
+    <div className="fixed inset-0 overflow-hidden bg-black">
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="relative overflow-hidden bg-[#100e0a] text-[#f5efe2] antialiased [text-rendering:optimizeLegibility]"
         style={{
-          background:
-            "linear-gradient(180deg,rgba(8,7,5,.55) 0%,rgba(8,7,5,0) 22%,rgba(8,7,5,0) 60%,rgba(8,7,5,.78) 100%)," +
-            "linear-gradient(90deg,rgba(8,7,5,.55) 0%,rgba(8,7,5,0) 35%,rgba(8,7,5,0) 65%,rgba(8,7,5,.45) 100%)," +
-            "radial-gradient(120% 80% at 50% 60%,rgba(0,0,0,0) 40%,rgba(0,0,0,.35) 100%)",
+          ...OUTFIT,
+          width: 1600,
+          height: canvas.h,
+          transform: `scale(${canvas.scale})`,
+          transformOrigin: "top left",
         }}
-      />
+      >
+        {/* background carousel */}
+        <div className="absolute inset-0">
+          {activeSlides.map((url, i) => (
+            <div
+              key={url}
+              className={`ss-slide absolute inset-0 bg-cover bg-center${i === slideIdx ? " is-active" : ""}`}
+              style={{ backgroundImage: `url("${url}")` }}
+            />
+          ))}
+        </div>
 
-      {/* geometric pattern left edge */}
-      <div
-        className="absolute left-0 top-0 w-[280px] h-full pointer-events-none opacity-[.06]"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%23f5efe2' stroke-width='0.7'><path d='M40 4 L52 16 L52 32 L40 44 L28 32 L28 16 Z'/><path d='M40 36 L52 48 L52 64 L40 76 L28 64 L28 48 Z'/><path d='M0 20 L8 28 L8 44 L0 52'/><path d='M80 20 L72 28 L72 44 L80 52'/></g></svg>\")",
-          backgroundSize: "80px 80px",
-        }}
-      />
+        {/* vignette */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(180deg,rgba(8,7,5,.55) 0%,rgba(8,7,5,0) 22%,rgba(8,7,5,0) 60%,rgba(8,7,5,.78) 100%)," +
+              "linear-gradient(90deg,rgba(8,7,5,.55) 0%,rgba(8,7,5,0) 35%,rgba(8,7,5,0) 65%,rgba(8,7,5,.45) 100%)," +
+              "radial-gradient(120% 80% at 50% 60%,rgba(0,0,0,0) 40%,rgba(0,0,0,.35) 100%)",
+          }}
+        />
 
-      {/* film grain */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[.18] mix-blend-overlay"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.92  0 0 0 0 0.85  0 0 0 0.7 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
-        }}
-      />
+        {/* geometric pattern left edge */}
+        <div
+          className="absolute left-0 top-0 w-[280px] h-full pointer-events-none opacity-[.06]"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%23f5efe2' stroke-width='0.7'><path d='M40 4 L52 16 L52 32 L40 44 L28 32 L28 16 Z'/><path d='M40 36 L52 48 L52 64 L40 76 L28 64 L28 48 Z'/><path d='M0 20 L8 28 L8 44 L0 52'/><path d='M80 20 L72 28 L72 44 L80 52'/></g></svg>\")",
+            backgroundSize: "80px 80px",
+          }}
+        />
 
-      {/* ── top bar ── */}
-      <div className="absolute top-14 left-16 right-16 flex justify-between items-start">
-        {/* clock + dates */}
-        <div className="flex flex-col gap-2">
-          <div
-            className="font-extralight text-[132px] leading-[.92] tracking-[-0.04em] tabular-nums flex items-baseline gap-1.5 [text-shadow:0_4px_40px_rgba(0,0,0,.45)]"
-            style={OUTFIT}
-          >
-            <span>{pad(now.getHours())}</span>
-            <span>:</span>
-            <span>{pad(now.getMinutes())}</span>
-            <span className="text-[44px] font-light text-[#f5efe2]/62 ml-3.5 tracking-[-0.02em]">
-              {pad(now.getSeconds())}
-            </span>
-          </div>
+        {/* film grain */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[.18] mix-blend-overlay"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.92  0 0 0 0 0.85  0 0 0 0.7 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
+          }}
+        />
 
-          <div className="flex gap-7 items-center mt-1.5">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[11px] tracking-[0.22em] uppercase text-[#f5efe2]/38 font-medium">
-                Gregorian
-              </span>
-              <span className="text-[22px] text-[#f5efe2] font-light tracking-[0.01em]">
-                {gregorianStr}
+        {/* ── top bar ── */}
+        <div className="absolute top-14 left-16 right-16 flex justify-between items-start">
+          {/* clock + dates */}
+          <div className="flex flex-col gap-2">
+            <div
+              className="font-extralight text-[132px] leading-[.92] tracking-[-0.04em] tabular-nums flex items-baseline gap-1.5 [text-shadow:0_4px_40px_rgba(0,0,0,.45)]"
+              style={OUTFIT}
+            >
+              <span>{pad(now.getHours())}</span>
+              <span>:</span>
+              <span>{pad(now.getMinutes())}</span>
+              <span className="text-[44px] font-light text-[#f5efe2]/62 ml-3.5 tracking-[-0.02em]">
+                {pad(now.getSeconds())}
               </span>
             </div>
-            <div className="w-px h-10 bg-[#f5efe2]/18 shrink-0" />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[11px] tracking-[0.22em] uppercase text-[#f5efe2]/38 font-medium">
-                Hijri
+
+            <div className="flex gap-7 items-center mt-1.5">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] tracking-[0.22em] uppercase text-[#f5efe2]/38 font-medium">
+                  Gregorian
+                </span>
+                <span className="text-[22px] text-[#f5efe2] font-light tracking-[0.01em]">
+                  {gregorianStr}
+                </span>
+              </div>
+              <div className="w-px h-10 bg-[#f5efe2]/18 shrink-0" />
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] tracking-[0.22em] uppercase text-[#f5efe2]/38 font-medium">
+                  Hijri
+                </span>
+                <span
+                  className="text-[26px] text-[#f5efe2]"
+                  style={{ ...AMIRI, ...RTL }}
+                >
+                  {hijriStr}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── countdown / next prayer ── */}
+        {nextPrayer ? (
+          <div className="absolute left-16 bottom-[220px] max-w-[720px]">
+            <div className="flex items-center gap-3 text-[12px] tracking-[0.28em] uppercase text-[oklch(0.82_0.08_78)] font-medium mb-3.5">
+              <span className="ss-pulse w-2 h-2 rounded-full bg-[oklch(0.82_0.08_78)] shrink-0" />
+              <span>Time until next prayer</span>
+            </div>
+            <div className="flex items-baseline gap-[22px] mb-2">
+              <span
+                className="text-[64px] leading-none tracking-[-0.01em] text-[#f5efe2] font-medium"
+                style={CORMORANT}
+              >
+                {nextPrayer.en}
               </span>
               <span
-                className="text-[26px] text-[#f5efe2]"
+                className="text-[48px] text-[#f5efe2]/62"
                 style={{ ...AMIRI, ...RTL }}
               >
-                {hijriStr}
+                {nextPrayer.ar}
               </span>
             </div>
+            <div
+              className="font-extralight text-[124px] leading-none tracking-[-0.04em] tabular-nums text-[#f5efe2] [text-shadow:0_4px_40px_rgba(0,0,0,.5)]"
+              style={OUTFIT}
+            >
+              {countdown}
+              <span className="text-[18px] tracking-[0.22em] uppercase text-[#f5efe2]/38 ml-3.5 align-middle font-medium">
+                remaining
+              </span>
+            </div>
+            <div className="mt-2 text-base text-[#f5efe2]/62 tracking-[0.02em]">
+              Adhan at{" "}
+              <strong className="text-[#f5efe2] font-medium">
+                {nextPrayer.time}
+              </strong>
+              {afterPrayer && tillAfterStr && (
+                <>
+                  {" "}
+                  · followed by {afterPrayer.en} in{" "}
+                  <strong className="text-[#f5efe2] font-medium">
+                    {tillAfterStr}
+                  </strong>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        ) : (
+          <div className="absolute left-16 bottom-[220px]">
+            <p className="text-[11px] tracking-[0.22em] uppercase text-[#f5efe2]/38 font-medium">
+              Prayer times unavailable
+            </p>
+            <p className="mt-2.5 text-[18px] font-light text-[#f5efe2]/55">
+              Configure a mosque in the app to enable live prayer times.
+            </p>
+          </div>
+        )}
 
-      {/* ── countdown / next prayer ── */}
-      {nextPrayer ? (
-        <div className="absolute left-16 bottom-[220px] max-w-[720px]">
-          <div className="flex items-center gap-3 text-[12px] tracking-[0.28em] uppercase text-[oklch(0.82_0.08_78)] font-medium mb-3.5">
-            <span className="ss-pulse w-2 h-2 rounded-full bg-[oklch(0.82_0.08_78)] shrink-0" />
-            <span>Time until next prayer</span>
-          </div>
-          <div className="flex items-baseline gap-[22px] mb-2">
-            <span
-              className="text-[64px] leading-none tracking-[-0.01em] text-[#f5efe2] font-medium"
-              style={CORMORANT}
-            >
-              {nextPrayer.en}
+        {/* ── prayer rail ── */}
+        <aside className="absolute top-1/2 right-16 -translate-y-1/2 w-[320px] bg-[rgba(14,12,9,0.55)] backdrop-blur-[28px] backdrop-saturate-120 border border-[rgba(245,239,226,0.18)] rounded-[28px] p-[22px] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+          <div className="px-3 pt-1.5 pb-[18px] flex justify-between items-center border-b border-[rgba(245,239,226,0.18)]">
+            <span className="text-[11px] tracking-[0.24em] uppercase text-[#f5efe2]/38 font-medium">
+              Today's Salah
             </span>
-            <span
-              className="text-[48px] text-[#f5efe2]/62"
-              style={{ ...AMIRI, ...RTL }}
-            >
-              {nextPrayer.ar}
+            <span className="text-[12px] text-[#f5efe2]/62">
+              {mosqueName ? `${dayStr} · ${mosqueName}` : dayStr}
             </span>
           </div>
+
+          <div className="flex flex-col pt-2">
+            {prayers.map((p) => {
+              const Glyph = GLYPHS[p.key];
+              const active = isRowActive(p.key);
+              const passed = isRowPassed(p.key, p.time);
+              return (
+                <div
+                  key={p.key}
+                  className={`grid grid-cols-[30px_1fr_auto] items-center gap-3.5 px-3 py-3.5 rounded-[14px] relative border${active ? " ss-row-active" : " border-transparent"}`}
+                  style={
+                    active
+                      ? {
+                          background:
+                            "linear-gradient(90deg,oklch(0.82 0.08 78/.18),oklch(0.82 0.08 78/.04))",
+                          borderColor: "oklch(0.82 0.08 78/.35)",
+                        }
+                      : undefined
+                  }
+                >
+                  {/* glyph */}
+                  <div
+                    className={`w-[30px] h-[30px] flex items-center justify-center${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]/38"}`}
+                  >
+                    {Glyph && <Glyph />}
+                  </div>
+
+                  {/* name */}
+                  <div className="flex flex-col gap-0.5">
+                    <span
+                      className={`text-[17px] tracking-[0.01em]${active ? " text-[#f5efe2] font-medium" : passed ? " text-[#f5efe2]/38 font-normal" : " text-[#f5efe2] font-normal"}`}
+                    >
+                      {p.en}
+                    </span>
+                    <span
+                      className={`text-[18px]${passed ? " text-[#f5efe2]/22" : " text-[#f5efe2]/38"}`}
+                      style={{ ...AMIRI, ...RTL }}
+                    >
+                      {p.ar}
+                    </span>
+                  </div>
+
+                  {/* time */}
+                  <span
+                    className={`text-[22px] font-light tabular-nums tracking-[-0.01em]${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]"}`}
+                  >
+                    {p.time}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </aside>
+
+        {/* ── hadith quote ── */}
+        <div
+          className="absolute left-16 right-[420px] bottom-14 flex items-end gap-8 transition-opacity duration-600"
+          style={{ opacity: quoteVisible ? 1 : 0 }}
+        >
           <div
-            className="font-extralight text-[124px] leading-none tracking-[-0.04em] tabular-nums text-[#f5efe2] [text-shadow:0_4px_40px_rgba(0,0,0,.5)]"
-            style={OUTFIT}
+            className="ss-quote-body text-[26px] leading-[1.4] text-[#f5efe2] max-w-[680px] text-pretty"
+            style={CORMORANT}
           >
-            {countdown}
-            <span className="text-[18px] tracking-[0.22em] uppercase text-[#f5efe2]/38 ml-3.5 align-middle font-medium">
-              remaining
+            {quote.t}
+            <span
+              className="text-[13px] tracking-[0.16em] uppercase text-[#f5efe2]/38 font-medium mt-2.5 block"
+              style={OUTFIT}
+            >
+              {quote.a}
             </span>
           </div>
-          <div className="mt-2 text-base text-[#f5efe2]/62 tracking-[0.02em]">
-            Adhan at{" "}
-            <strong className="text-[#f5efe2] font-medium">
-              {nextPrayer.time}
-            </strong>
-            {afterPrayer && tillAfterStr && (
-              <>
-                {" "}
-                · followed by {afterPrayer.en} in{" "}
-                <strong className="text-[#f5efe2] font-medium">
-                  {tillAfterStr}
-                </strong>
-              </>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="absolute left-16 bottom-[220px]">
-          <p className="text-[11px] tracking-[0.22em] uppercase text-[#f5efe2]/38 font-medium">
-            Prayer times unavailable
-          </p>
-          <p className="mt-2.5 text-[18px] font-light text-[#f5efe2]/55">
-            Configure a mosque in the app to enable live prayer times.
-          </p>
-        </div>
-      )}
-
-      {/* ── prayer rail ── */}
-      <aside className="absolute top-1/2 right-16 -translate-y-1/2 w-[320px] bg-[rgba(14,12,9,0.55)] backdrop-blur-[28px] backdrop-saturate-120 border border-[rgba(245,239,226,0.18)] rounded-[28px] p-[22px] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
-        <div className="px-3 pt-1.5 pb-[18px] flex justify-between items-center border-b border-[rgba(245,239,226,0.18)]">
-          <span className="text-[11px] tracking-[0.24em] uppercase text-[#f5efe2]/38 font-medium">
-            Today's Salah
-          </span>
-          <span className="text-[12px] text-[#f5efe2]/62">
-            {mosqueName ? `${dayStr} · ${mosqueName}` : dayStr}
-          </span>
         </div>
 
-        <div className="flex flex-col pt-2">
-          {prayers.map((p) => {
-            const Glyph = GLYPHS[p.key];
-            const active = isRowActive(p.key);
-            const passed = isRowPassed(p.key, p.time);
+        {/* ── carousel pips — fixed 5, cycle through regardless of total slide count ── */}
+        <div className="absolute left-1/2 bottom-6 -translate-x-1/2 flex gap-2">
+          {Array.from({ length: PIP_COUNT }, (_, i) => {
+            const isActive = i === activePip;
             return (
               <div
-                key={p.key}
-                className={`grid grid-cols-[30px_1fr_auto] items-center gap-3.5 px-3 py-3.5 rounded-[14px] relative border${active ? " ss-row-active" : " border-transparent"}`}
-                style={
-                  active
-                    ? {
-                        background:
-                          "linear-gradient(90deg,oklch(0.82 0.08 78/.18),oklch(0.82 0.08 78/.04))",
-                        borderColor: "oklch(0.82 0.08 78/.35)",
-                      }
-                    : undefined
-                }
+                key={`${i}-${pipEpoch}`}
+                className={`w-6 h-[3px] rounded-[2px] overflow-hidden${isActive ? " bg-[rgba(245,239,226,0.35)]" : " bg-[rgba(245,239,226,0.22)]"}`}
               >
-                {/* glyph */}
-                <div
-                  className={`w-[30px] h-[30px] flex items-center justify-center${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]/38"}`}
-                >
-                  {Glyph && <Glyph />}
-                </div>
-
-                {/* name */}
-                <div className="flex flex-col gap-0.5">
-                  <span
-                    className={`text-[17px] tracking-[0.01em]${active ? " text-[#f5efe2] font-medium" : passed ? " text-[#f5efe2]/38 font-normal" : " text-[#f5efe2] font-normal"}`}
-                  >
-                    {p.en}
-                  </span>
-                  <span
-                    className={`text-[18px]${passed ? " text-[#f5efe2]/22" : " text-[#f5efe2]/38"}`}
-                    style={{ ...AMIRI, ...RTL }}
-                  >
-                    {p.ar}
-                  </span>
-                </div>
-
-                {/* time */}
                 <span
-                  className={`text-[22px] font-light tabular-nums tracking-[-0.01em]${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]"}`}
-                >
-                  {p.time}
-                </span>
+                  className={`block w-full h-full bg-[#f5efe2] scale-x-0 origin-left${isActive ? " ss-pip-fill" : ""}`}
+                />
               </div>
             );
           })}
         </div>
-      </aside>
-
-      {/* ── hadith quote ── */}
-      <div
-        className="absolute left-16 right-[420px] bottom-14 flex items-end gap-8 transition-opacity duration-600"
-        style={{ opacity: quoteVisible ? 1 : 0 }}
-      >
-        <div
-          className="ss-quote-body text-[26px] leading-[1.4] text-[#f5efe2] max-w-[680px] text-pretty"
-          style={CORMORANT}
-        >
-          {quote.t}
-          <span
-            className="text-[13px] tracking-[0.16em] uppercase text-[#f5efe2]/38 font-medium mt-2.5 block"
-            style={OUTFIT}
-          >
-            {quote.a}
-          </span>
-        </div>
-      </div>
-
-      {/* ── carousel pips — fixed 5, cycle through regardless of total slide count ── */}
-      <div className="absolute left-1/2 bottom-6 -translate-x-1/2 flex gap-2">
-        {Array.from({ length: PIP_COUNT }, (_, i) => {
-          const isActive = i === activePip;
-          return (
-            <div
-              key={`${i}-${pipEpoch}`}
-              className={`w-6 h-[3px] rounded-[2px] overflow-hidden${isActive ? " bg-[rgba(245,239,226,0.35)]" : " bg-[rgba(245,239,226,0.22)]"}`}
-            >
-              <span
-                className={`block w-full h-full bg-[#f5efe2] scale-x-0 origin-left${isActive ? " ss-pip-fill" : ""}`}
-              />
-            </div>
-          );
-        })}
       </div>
     </div>
   );
