@@ -4,6 +4,7 @@ import MosquePage from "./pages/mosque-page";
 import ChromecastPage from "./pages/chromecast-page";
 import AdhanPage from "./pages/adhan-page";
 import SchedulePage from "./pages/schedule-page";
+import ScreensaverPage from "./pages/screensaver-page";
 
 export const router = createBrowserRouter([
   {
@@ -31,5 +32,9 @@ export const router = createBrowserRouter([
         element: <SchedulePage />,
       },
     ],
+  },
+  {
+    path: "/screensaver",
+    element: <ScreensaverPage />,
   },
 ]);

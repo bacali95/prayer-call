@@ -1,0 +1,54 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Amiri:wght@400;700&display=swap");
+
+/* Slide carousel — opacity + scale managed here so transitions fire on .is-active toggle */
+.ss-slide {
+  opacity: 0;
+  transform: scale(1.06);
+  transition:
+    opacity 1.6s ease-in-out,
+    transform 9s ease-out;
+}
+.ss-slide.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Gold pulse ring */
+@keyframes ss-pulse {
+  0%   { box-shadow: 0 0 0 0 oklch(0.82 0.08 78 / 0.6); }
+  70%  { box-shadow: 0 0 0 14px oklch(0.82 0.08 78 / 0); }
+  100% { box-shadow: 0 0 0 0 oklch(0.82 0.08 78 / 0); }
+}
+.ss-pulse { animation: ss-pulse 2.2s ease-out infinite; }
+
+/* Pip progress bar fill */
+@keyframes ss-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.ss-pip-fill { animation: ss-fill 8s linear forwards; }
+
+/* Opening quotation mark (pseudo-element — cannot be done in Tailwind) */
+.ss-quote-body::before {
+  content: "\201C";
+  font-family: "Cormorant Garamond", serif;
+  font-size: 80px;
+  line-height: 0.6;
+  color: oklch(0.82 0.08 78);
+  margin-right: 6px;
+  vertical-align: -0.18em;
+}
+
+/* Active-row left accent bar (pseudo-element) */
+.ss-row-active::before {
+  content: "";
+  position: absolute;
+  left: -22px;
+  top: 50%;
+  width: 3px;
+  height: 28px;
+  background: oklch(0.82 0.08 78);
+  border-radius: 2px;
+  transform: translateY(-50%);
+  box-shadow: 0 0 14px oklch(0.82 0.08 78 / 0.6);
+}

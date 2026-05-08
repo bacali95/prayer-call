@@ -11,7 +11,7 @@ from backend.services import ChromecastScanner, CronManager, MawaqitClient
 
 # Import route blueprints
 from backend.routes import (
-    config_bp, mosques_bp, chromecasts_bp, files_bp, cron_bp, test_bp
+    config_bp, mosques_bp, chromecasts_bp, files_bp, cron_bp, test_bp, screensaver_bp
 )
 
 # Determine if we're in production (serving static files)
@@ -59,7 +59,8 @@ async def create_app():
     app.register_blueprint(files_bp)
     app.register_blueprint(cron_bp)
     app.register_blueprint(test_bp)
-    
+    app.register_blueprint(screensaver_bp)
+
     # Serve React app for production
     if PRODUCTION:
         # Schedule the daily reschedule job at 2am

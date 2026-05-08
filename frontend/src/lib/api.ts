@@ -123,6 +123,14 @@ export const api = {
     return response.json();
   },
 
+  // Screensaver slides
+  getScreensaverSlides: async (): Promise<string[]> => {
+    const response = await fetch(`${API_BASE}/screensaver/slides`);
+    if (!response.ok) throw new Error("Failed to get screensaver slides");
+    const data = await response.json() as { urls: string[] };
+    return data.urls;
+  },
+
   // Year prayer times
   getPrayerTimesYear: async (
     mosqueId: string,

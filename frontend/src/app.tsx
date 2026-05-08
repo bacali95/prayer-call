@@ -122,6 +122,14 @@ function App() {
         >
           Adhan Files
         </NavLink>
+        <a
+          href="/screensaver"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto px-5 py-2.5 no-underline rounded transition-all font-medium border text-foreground border-transparent hover:bg-accent"
+        >
+          Screensaver ↗
+        </a>
       </nav>
 
       <main className="bg-card rounded-lg p-8 shadow-xs border border-border">
