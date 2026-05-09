@@ -19,24 +19,6 @@ function msUntilTopOfHour(): number {
   return next.getTime() - now.getTime();
 }
 
-const QUOTES = [
-  {
-    t: "The best of deeds in the sight of Allah is the prayer offered at its earliest time.",
-    a: "Sahih al-Bukhari · Hadith",
-  },
-  {
-    t: "Whoever stands for night prayer in Ramadan out of faith and hope for reward will be forgiven their past sins.",
-    a: "Sahih al-Bukhari · Hadith",
-  },
-  {
-    t: "Verily, in the remembrance of Allah do hearts find rest.",
-    a: "Qur'an · 13:28",
-  },
-  { t: "The cure for ignorance is to ask.", a: "Sunan Abi Dawud · Hadith" },
-  { t: "Indeed, with hardship will be ease.", a: "Qur'an · 94:6" },
-  { t: "Speak good or remain silent.", a: "Sahih al-Bukhari · Hadith" },
-];
-
 const PRAYER_DEFS = [
   { key: "fajr", en: "Fajr", ar: "الفجر", passive: false },
   { key: "shuruq", en: "Shuruq", ar: "الشروق", passive: true },
@@ -207,8 +189,6 @@ export default function ScreensaverPage() {
   const [rawSlide, setRawSlide] = useState(0);
   const [pipEpoch, setPipEpoch] = useState(0);
   const [now, setNow] = useState(new Date());
-  const [quoteIdx, setQuoteIdx] = useState(0);
-  const [quoteVisible, setQuoteVisible] = useState(true);
 
   // width fixed at 1600; height derived from actual viewport ratio → fills any screen
   useEffect(() => {
@@ -250,17 +230,6 @@ export default function ScreensaverPage() {
     };
     schedule();
     return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setQuoteVisible(false);
-      setTimeout(() => {
-        setQuoteIdx((i) => (i + 1) % QUOTES.length);
-        setQuoteVisible(true);
-      }, 650);
-    }, 16000);
-    return () => clearInterval(id);
   }, []);
 
   // ── prayer logic ─────────────────────────────────────────────────────────
@@ -325,7 +294,6 @@ export default function ScreensaverPage() {
   }).format(now);
 
   const mosqueName = config?.mosque?.name ?? "";
-  const quote = QUOTES[quoteIdx];
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -425,7 +393,7 @@ export default function ScreensaverPage() {
 
         {/* ── countdown / next prayer ── */}
         {nextPrayer ? (
-          <div className="absolute left-16 bottom-[220px] max-w-[720px]">
+          <div className="absolute left-16 bottom-14 max-w-[720px]">
             <div className="flex items-center gap-3 text-[12px] tracking-[0.28em] uppercase text-[oklch(0.82_0.08_78)] font-medium mb-3.5">
               <span className="ss-pulse w-2 h-2 rounded-full bg-[oklch(0.82_0.08_78)] shrink-0" />
               <span>Time until next prayer</span>
@@ -481,12 +449,12 @@ export default function ScreensaverPage() {
         )}
 
         {/* ── prayer rail ── */}
-        <aside className="absolute top-1/2 right-16 -translate-y-1/2 w-[320px] bg-[rgba(14,12,9,0.55)] backdrop-blur-[28px] backdrop-saturate-120 border border-[rgba(245,239,226,0.18)] rounded-[28px] p-[22px] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+        <aside className="absolute top-1/2 right-16 -translate-y-1/2 w-[450px] bg-[rgba(14,12,9,0.55)] backdrop-blur-[28px] backdrop-saturate-120 border border-[rgba(245,239,226,0.18)] rounded-[28px] p-[22px] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
           <div className="px-3 pt-1.5 pb-[18px] flex justify-between items-center border-b border-[rgba(245,239,226,0.18)]">
-            <span className="text-[11px] tracking-[0.24em] uppercase text-[#f5efe2]/38 font-medium">
+            <span className="text-[15px] tracking-[0.24em] uppercase text-[#f5efe2]/38 font-medium">
               Today's Salah
             </span>
-            <span className="text-[12px] text-[#f5efe2]/62">
+            <span className="text-[16px] text-[#f5efe2]/62">
               {mosqueName ? `${dayStr} · ${mosqueName}` : dayStr}
             </span>
           </div>
@@ -499,7 +467,7 @@ export default function ScreensaverPage() {
               return (
                 <div
                   key={p.key}
-                  className={`grid grid-cols-[30px_1fr_auto] items-center gap-3.5 px-3 py-3.5 rounded-[14px] relative border${active ? " ss-row-active" : " border-transparent"}`}
+                  className={`grid grid-cols-[50px_1fr_auto] items-center gap-3.5 px-3 py-3.5 rounded-[14px] relative border${active ? " ss-row-active" : " border-transparent"}`}
                   style={
                     active
                       ? {
@@ -512,7 +480,7 @@ export default function ScreensaverPage() {
                 >
                   {/* glyph */}
                   <div
-                    className={`w-[30px] h-[30px] flex items-center justify-center${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]/38"}`}
+                    className={`w-[50px] h-[50px] flex items-center justify-center${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]/38"}`}
                   >
                     {Glyph && <Glyph />}
                   </div>
@@ -520,12 +488,12 @@ export default function ScreensaverPage() {
                   {/* name */}
                   <div className="flex flex-col gap-0.5">
                     <span
-                      className={`text-[17px] tracking-[0.01em]${active ? " text-[#f5efe2] font-medium" : passed ? " text-[#f5efe2]/38 font-normal" : " text-[#f5efe2] font-normal"}`}
+                      className={`text-[21px] tracking-[0.01em]${active ? " text-[#f5efe2] font-medium" : passed ? " text-[#f5efe2]/38 font-normal" : " text-[#f5efe2] font-normal"}`}
                     >
                       {p.en}
                     </span>
                     <span
-                      className={`text-[18px]${passed ? " text-[#f5efe2]/22" : " text-[#f5efe2]/38"}`}
+                      className={`text-[22px]${passed ? " text-[#f5efe2]/22" : " text-[#f5efe2]/38"}`}
                       style={{ ...AMIRI, ...RTL }}
                     >
                       {p.ar}
@@ -534,7 +502,7 @@ export default function ScreensaverPage() {
 
                   {/* time */}
                   <span
-                    className={`text-[22px] font-light tabular-nums tracking-[-0.01em]${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]"}`}
+                    className={`text-[26px] font-light tabular-nums tracking-[-0.01em]${active ? " text-[oklch(0.82_0.08_78)]" : passed ? " text-[#f5efe2]/38" : " text-[#f5efe2]"}`}
                   >
                     {p.time}
                   </span>
@@ -543,25 +511,6 @@ export default function ScreensaverPage() {
             })}
           </div>
         </aside>
-
-        {/* ── hadith quote ── */}
-        <div
-          className="absolute left-16 right-[420px] bottom-14 flex items-end gap-8 transition-opacity duration-600"
-          style={{ opacity: quoteVisible ? 1 : 0 }}
-        >
-          <div
-            className="ss-quote-body text-[26px] leading-[1.4] text-[#f5efe2] max-w-[680px] text-pretty"
-            style={CORMORANT}
-          >
-            {quote.t}
-            <span
-              className="text-[13px] tracking-[0.16em] uppercase text-[#f5efe2]/38 font-medium mt-2.5 block"
-              style={OUTFIT}
-            >
-              {quote.a}
-            </span>
-          </div>
-        </div>
 
         {/* ── carousel pips — fixed 5, cycle through regardless of total slide count ── */}
         <div className="absolute left-1/2 bottom-6 -translate-x-1/2 flex gap-2">
