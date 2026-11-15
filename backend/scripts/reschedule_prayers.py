@@ -1,79 +1,40 @@
-"""Script to reschedule prayers (called by cron job at 2am daily)"""
+"""Fetch new prayer times and reschedule the cron jobs (run daily at 02:00 by cron)."""
+
+import logging
 import sys
-import asyncio
 from pathlib import Path
 
-# Add parent directories to path to import backend modules
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from backend.config import ConfigManager
-from backend.services import MawaqitClient, CronManager
-from backend.utils import transform_prayer_times, get_prayer_schedule_date
+from backend import settings  # noqa: E402
+from backend.services import build_services  # noqa: E402
+from backend.services.prayer_schedule import refresh_prayer_times  # noqa: E402
+
+logger = logging.getLogger("reschedule_prayers")
 
 
-async def main():
-    """Reschedule prayers by fetching new times and updating cron jobs"""
-    print("Starting prayer reschedule at 2am...")
-    
-    # Load config
-    config_manager = ConfigManager()
-    config = config_manager.load()
-    
-    # Check if mosque and chromecast are configured
-    mosque = config.get("mosque")
-    chromecast = config.get("chromecast")
-    
-    if not mosque or not mosque.get("uuid"):
-        print("No mosque configured. Skipping reschedule.")
-        sys.exit(0)
-    
-    if not chromecast or not chromecast.get("name"):
-        print("No chromecast configured. Skipping reschedule.")
-        sys.exit(0)
-    
-    mosque_id = mosque["uuid"]
-    chromecast_name = chromecast["name"]
-    
-    print(f"Fetching prayer times for mosque: {mosque.get('name', mosque_id)}")
-    print(f"Chromecast: {chromecast_name}")
-    
-    # Fetch prayer times from API
-    mawaqit_client = MawaqitClient()
-    prayer_times_data = await mawaqit_client.get_prayer_times(mosque_id)
-    
-    if not prayer_times_data:
-        print("Failed to fetch prayer times from API. Skipping reschedule.")
-        sys.exit(1)
-    
-    # Transform prayer times to simple format
-    transformed_times = transform_prayer_times(prayer_times_data)
-    
-    if not transformed_times:
-        print("No prayer times extracted. Skipping reschedule.")
-        sys.exit(1)
-    
-    print(f"Extracted prayer times: {transformed_times}")
-    
-    # Get current date in both formats
-    schedule_date = get_prayer_schedule_date()
-    
-    # Update config with new prayer times and schedule date
-    config_manager.update({
-        "prayer_times": transformed_times,
-        "prayer_schedule_date": schedule_date
-    })
-    
-    # Schedule new cron jobs
-    cron_manager = CronManager()
-    success = cron_manager.schedule_prayers(transformed_times, chromecast_name)
-    
-    if success:
-        print("Successfully rescheduled all prayer times!")
-    else:
-        print("Failed to reschedule prayer times.")
-        sys.exit(1)
+def main() -> int:
+    settings.configure_logging()
+    logger.info("Starting daily prayer reschedule")
+    services = build_services()
+    config = services.config.load()
+
+    mosque_uuid = (config.get("mosque") or {}).get("uuid")
+    if not mosque_uuid:
+        logger.info("No mosque configured; skipping")
+        return 0
+    if not (config.get("chromecast") or {}).get("name"):
+        logger.info("No chromecast configured; skipping")
+        return 0
+
+    try:
+        times = refresh_prayer_times(services, mosque_uuid)
+    except Exception:
+        logger.exception("Reschedule failed")
+        return 1
+    logger.info("Rescheduled prayer times: %s", times)
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    sys.exit(main())

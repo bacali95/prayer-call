@@ -1,111 +1,114 @@
 """Prayer time transformation utilities"""
+
+import re
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Any
+
+from backend.constants import PRAYER_KEYS
+
+TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 
 
-def extract_prayer_times_from_calendar(calendar: List[Dict], date: Optional[datetime] = None) -> Dict[str, str]:
-    """Extract prayer times from calendar array structure.
-    
-    Calendar structure:
-    - Array of 12 objects (one per month, 0-indexed: Jan=0, Dec=11)
-    - Each month object has keys "1" through "31" (day numbers as strings)
-    - Each day has an array of 6 times: [Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha]
-    
-    Args:
-        calendar: Array of month objects
-        date: datetime object (defaults to today)
-    
-    Returns:
-        Dict with prayer names as keys and times as values
+def parse_hhmm(value: str) -> tuple[int, int]:
+    """Parse ``HH:MM`` into ``(hour, minute)``; raises ValueError when invalid."""
+    match = TIME_RE.match(value.strip()) if isinstance(value, str) else None
+    if not match:
+        raise ValueError(f"Invalid time {value!r}, expected HH:MM")
+    return int(match.group(1)), int(match.group(2))
+
+
+def extract_prayer_times_from_calendar(
+    calendar: list[dict], date: datetime | None = None
+) -> dict[str, str]:
+    """Extract one day's prayer times from a Mawaqit calendar.
+
+    The calendar is a list of 12 month dicts (Jan=0); each maps the day number
+    (as a string) to ``[Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha]``.
+    Returns ``{}`` when the day cannot be found.
     """
-    if not calendar or not isinstance(calendar, list) or len(calendar) == 0:
+    if not calendar or not isinstance(calendar, list):
         return {}
-    
-    if date is None:
-        date = datetime.now()
-    
-    month_index = date.month - 1  # Convert to 0-indexed (Jan=0, Dec=11)
-    day = str(date.day)  # Day as string key
-    
-    # Ensure we have a valid month
-    if month_index < 0 or month_index >= len(calendar):
+
+    date = date or datetime.now()
+    month_index = date.month - 1
+    day = str(date.day)
+
+    if month_index >= len(calendar):
         return {}
-    
+
     month_data = calendar[month_index]
     if not isinstance(month_data, dict) or day not in month_data:
         return {}
-    
+
     day_times = month_data[day]
     if not isinstance(day_times, list) or len(day_times) < 6:
         return {}
-    
-    # Map array indices to prayer names
-    # Index 0 = Fajr, 1 = Shuruq, 2 = Dhuhr, 3 = Asr, 4 = Maghrib, 5 = Isha
+
     return {
         "fajr": day_times[0],
-        "shuruq": day_times[1],  # Sunrise (optional, not always used)
+        "shuruq": day_times[1],
         "dhuhr": day_times[2],
         "asr": day_times[3],
         "maghrib": day_times[4],
-        "isha": day_times[5]
+        "isha": day_times[5],
     }
 
 
-def transform_prayer_times(prayer_times: Dict[str, Any]) -> Dict[str, str]:
-    """Transform prayer times from API format to simple string format.
-    
-    The API may return prayer times in different formats:
-    1. Calendar array structure (preferred if available)
-    2. Objects with day numbers (1-31) as keys
-    3. Simple string values
-    
-    This function extracts today's prayer times or the first available day.
+def transform_prayer_times(
+    prayer_times: dict[str, Any], today: datetime | None = None
+) -> dict[str, str]:
+    """Transform a Mawaqit payload into ``{prayer: "HH:MM"}`` for today.
+
+    Calendar payloads are preferred (shuruq is kept, it is display-only);
+    otherwise legacy shapes (per-day dicts, plain strings, lists) are handled.
     """
     if not prayer_times:
         return {}
-    
-    today = datetime.now()
-    
-    # First, try to extract from calendar if available
-    if "calendar" in prayer_times and prayer_times["calendar"]:
+
+    today = today or datetime.now()
+
+    if prayer_times.get("calendar"):
         calendar_times = extract_prayer_times_from_calendar(prayer_times["calendar"], today)
         if calendar_times:
-            # Remove shuruq if not needed (it's sunrise, not a prayer time)
-            calendar_times.pop("shuruq", None)
             return calendar_times
-    
-    # Fallback to old format handling
-    transformed = {}
-    for prayer, time_value in prayer_times.items():
-        # Skip calendar since we already handled it
+
+    transformed: dict[str, Any] = {}
+    for prayer, value in prayer_times.items():
         if prayer == "calendar":
             continue
-            
-        if isinstance(time_value, dict):
-            # If time is an object with day numbers, get today's time or first available
+        if isinstance(value, dict):
             day_key = str(today.day)
-            if day_key in time_value:
-                transformed[prayer] = time_value[day_key]
-            elif today.day in time_value:
-                transformed[prayer] = time_value[today.day]
-            elif time_value:
-                # Fall back to first available day
-                first_value = next(iter(time_value.values()), None)
-                transformed[prayer] = first_value
+            if day_key in value:
+                transformed[prayer] = value[day_key]
+            elif today.day in value:
+                transformed[prayer] = value[today.day]
+            elif value:
+                transformed[prayer] = next(iter(value.values()), None)
             else:
                 transformed[prayer] = None
-        elif isinstance(time_value, str):
-            # Already in string format
-            transformed[prayer] = time_value
-        elif isinstance(time_value, list) and len(time_value) > 0:
-            # Handle times array format (like in the "times" field)
-            # Map: [Fajr, Dhuhr, Asr, Maghrib, Isha] - 5 times
-            prayer_map = ["fajr", "dhuhr", "asr", "maghrib", "isha"]
-            for idx, prayer_name in enumerate(prayer_map):
-                if idx < len(time_value):
-                    transformed[prayer_name] = time_value[idx]
+        elif isinstance(value, str):
+            transformed[prayer] = value
+        elif isinstance(value, list) and value:
+            # Five-time list: [Fajr, Dhuhr, Asr, Maghrib, Isha]
+            for name, item in zip(("fajr", "dhuhr", "asr", "maghrib", "isha"), value, strict=False):
+                transformed[name] = item
         else:
             transformed[prayer] = None
-    
+
     return transformed
 
+
+def validate_prayer_times(value: Any) -> dict[str, str | None]:
+    """Validate a user supplied ``prayer_times`` dict; raises ValueError."""
+    if not isinstance(value, dict):
+        raise ValueError("prayer_times must be an object")
+    clean: dict[str, str | None] = {}
+    for key, time_value in value.items():
+        if key not in PRAYER_KEYS:
+            raise ValueError(f"Unknown prayer '{key}' in prayer_times")
+        if time_value in (None, ""):
+            clean[key] = None
+            continue
+        parse_hhmm(time_value)
+        clean[key] = time_value.strip()
+    return clean

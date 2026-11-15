@@ -1,78 +1,88 @@
 """Date utility functions for Gregorian and Hijri dates"""
-from datetime import datetime, date, timedelta
-from typing import Dict, List, Tuple, Optional
-from hijridate import convert
+
+import logging
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from hijridate import convert
 
-def format_date_both_calendars(target_date: date) -> Dict[str, str]:
+logger = logging.getLogger(__name__)
+
+
+def format_date_both_calendars(target_date: date) -> dict[str, str]:
     """
     Format a specific date in both Gregorian and Hijri formats.
-    
+
     Args:
         target_date: The date to format
-    
+
     Returns:
         Dict with 'gregorian' and 'hijri' keys containing formatted date strings
     """
     # Format Gregorian date (e.g., "Monday, January 15, 2024")
     gregorian = target_date.strftime("%A, %B %d, %Y")
-    
+
     # Convert to Hijri
     try:
-        hijri_date = convert.Gregorian(target_date.year, target_date.month, target_date.day).to_hijri()
-        
+        hijri_date = convert.Gregorian(
+            target_date.year, target_date.month, target_date.day
+        ).to_hijri()
+
         # Hijri month names in Arabic
         hijri_months = [
-            "محرم", "صفر", "ربيع الأول", "ربيع الثاني", "جمادى الأولى", "جمادى الثانية",
-            "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
+            "محرم",
+            "صفر",
+            "ربيع الأول",
+            "ربيع الثاني",
+            "جمادى الأولى",
+            "جمادى الثانية",
+            "رجب",
+            "شعبان",
+            "رمضان",
+            "شوال",
+            "ذو القعدة",
+            "ذو الحجة",
         ]
-        
+
         # Day names in Arabic
-        hijri_days = [
-            "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"
-        ]
-        
+        hijri_days = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+
         # Get day of week (0 = Monday, 6 = Sunday)
         day_of_week = target_date.weekday()
         day_name_ar = hijri_days[day_of_week]
-        
+
         month_name_ar = hijri_months[hijri_date.month - 1]
-        
+
         # Format Hijri date (e.g., "الاثنين، 5 جمادى الأولى 1445")
         hijri = f"{day_name_ar}، {hijri_date.day} {month_name_ar} {hijri_date.year}"
-        
+
     except Exception as e:
         # Fallback if conversion fails
-        print(f"Error converting to Hijri: {e}")
+        logger.warning("Error converting to Hijri: %s", e)
         hijri = "تاريخ غير متاح"
-    
-    return {
-        "gregorian": gregorian,
-        "hijri": hijri
-    }
+
+    return {"gregorian": gregorian, "hijri": hijri}
 
 
-def get_prayer_schedule_date() -> Dict[str, str]:
+def get_prayer_schedule_date(today: date | None = None) -> dict[str, str]:
     """
     Get current date in both Gregorian and Hijri formats.
-    
+
     Returns:
         Dict with 'gregorian' and 'hijri' keys containing formatted date strings
     """
-    today = datetime.now().date()
-    return format_date_both_calendars(today)
+    return format_date_both_calendars(today or datetime.now().date())
 
 
-def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tuple[date, date, bool]]:
+def get_dst_periods(year: int, timezone_name: str | None = None) -> list[tuple[date, date, bool]]:
     """
     Get Daylight Saving Time (DST) periods for a given year.
-    
+
     Args:
         year: The year to check
         timezone_name: Optional timezone name (e.g., 'Europe/Paris', 'America/New_York').
                       If None, uses system timezone or defaults to 'Europe/Paris'
-    
+
     Returns:
         List of tuples: (start_date, end_date, is_dst)
         Each tuple represents a period where DST is active or not.
@@ -84,23 +94,24 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
     if timezone_name is None:
         # Default to Europe/Amsterdam (common for many mosques)
         timezone_name = "Europe/Amsterdam"
-    
+
     try:
         tz = ZoneInfo(timezone_name)
     except Exception:
         # Fallback to system timezone or Europe/Paris
         try:
             import time
+
             tz_name = time.tzname[0] if time.daylight else time.tzname[1]
             tz = ZoneInfo(tz_name)
         except Exception:
             tz = ZoneInfo("Europe/Amsterdam")
-    
+
     periods = []
     current_date = date(year, 1, 1)
     last_dst = None
     period_start = date(year, 1, 1)
-    
+
     # Check each day to find DST transitions
     # Check at 11 PM (23:00) to determine the DST status for that day
     # This ensures we capture the status after any transition that happened earlier in the day
@@ -110,11 +121,11 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
         dt = datetime.combine(current_date, datetime.min.time().replace(hour=23))
         dt_tz = dt.replace(tzinfo=tz)
         is_dst = bool(dt_tz.dst().total_seconds() > 0)
-        
+
         if last_dst is None:
             last_dst = is_dst
             period_start = current_date
-        
+
         if is_dst != last_dst:
             # DST transition found - the status changed between previous day and current day
             # The transition happens early morning (2-3 AM) on current_date
@@ -126,29 +137,28 @@ def get_dst_periods(year: int, timezone_name: Optional[str] = None) -> List[Tupl
             # Start new period on the transition day with the new status
             period_start = current_date
             last_dst = is_dst
-        
+
         current_date += timedelta(days=1)
-    
+
     # Add final period
     if period_start:
         periods.append((period_start, date(year, 12, 31), last_dst))
-    
+
     return periods if periods else [(date(year, 1, 1), date(year, 12, 31), False)]
 
 
-def get_dst_transitions(year: int, timezone_name: Optional[str] = None) -> List[date]:
+def get_dst_transitions(year: int, timezone_name: str | None = None) -> list[date]:
     """
     Get DST transition dates (start and end) for a given year.
-    
+
     Returns:
         List of dates where DST transitions occur (typically 2 dates: start and end)
     """
     periods = get_dst_periods(year, timezone_name)
     transitions = []
 
-    for i, (start, end, is_dst) in enumerate(periods):
+    for i, (start, _end, _is_dst) in enumerate(periods):
         if i > 0:  # Skip first period start (Jan 1)
             transitions.append(start)
-    
-    return sorted(set(transitions))
 
+    return sorted(set(transitions))

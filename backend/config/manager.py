@@ -1,105 +1,192 @@
-"""Configuration file management"""
+"""Configuration file management.
+
+``config.json`` lives in ``CONFIG_DIR`` (a PVC directory in Kubernetes). Writes
+are atomic (temp file in the same directory + ``os.replace``), serialised with
+a lock, and a file that fails to parse is never silently replaced by defaults:
+it is copied to a ``.bak`` file first and reads fall back to defaults only.
+"""
+
+import contextlib
+import contextlib
 import copy
+import fcntl
 import json
+import logging
 import os
-from typing import Dict, Any, Optional
+import shutil
+import tempfile
+import threading
+import time
+from typing import Any
+
+from backend.constants import ADHAN_PRAYERS
+
+logger = logging.getLogger(__name__)
+
+# Keys whose dict values are merged key by key instead of being replaced.
+MERGE_KEYS = frozenset({"adhan_files", "adhan_volumes", "mawaqit"})
+
+
+class ConfigCorruptError(Exception):
+    """config.json exists but cannot be parsed; refusing to overwrite it."""
+
+
+Stamp = tuple[int, int, int]  # (inode, mtime_ns, size)
+
+
+def default_config() -> dict[str, Any]:
+    return {
+        "mawaqit": {},
+        "mosque": None,
+        "chromecast": None,
+        "adhan_files": dict.fromkeys(ADHAN_PRAYERS),
+        "adhan_volumes": dict.fromkeys(ADHAN_PRAYERS),
+        "prayer_times": {},
+        "prayer_schedule_date": None,
+        "unsplash_access_key": None,
+    }
+
+
+def _merge_defaults(defaults: Any, loaded: Any) -> Any:
+    """Overlay ``loaded`` onto ``defaults``; unknown keys in ``loaded`` survive."""
+    if isinstance(defaults, dict) and isinstance(loaded, dict):
+        merged = copy.deepcopy(defaults)
+        for key, value in loaded.items():
+            merged[key] = _merge_defaults(defaults[key], value) if key in defaults else value
+        return merged
+    if isinstance(defaults, dict) and loaded is None:
+        return copy.deepcopy(defaults)  # e.g. "mawaqit": null in an old file
+    if isinstance(defaults, dict):
+        return copy.deepcopy(defaults)  # wrong type: fall back to defaults
+    return loaded
+
+
+def redact(config: dict[str, Any]) -> dict[str, Any]:
+    """Return the public view of a config: no secrets, plus ``unsplash_configured``."""
+    public = copy.deepcopy(config)
+    public.pop("mawaqit", None)
+    key = public.pop("unsplash_access_key", None)
+    public["unsplash_configured"] = bool(key or os.environ.get("UNSPLASH_ACCESS_KEY"))
+    return public
 
 
 class ConfigManager:
-    """Manages loading and saving of configuration"""
+    """Thread-safe loading and saving of the application configuration."""
 
-    def __init__(self, config_dir: str = None, config_file: str = "config.json"):
+    def __init__(self, config_dir: str | None = None, config_file: str = "config.json"):
         if config_dir is None:
-            config_dir = os.environ.get("CONFIG_DIR")
-            if config_dir is None:
-                current_file = os.path.abspath(__file__)
-                config_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+            from backend import settings
 
+            config_dir = settings.config_dir()
         self.config_dir = config_dir
         self.config_file = os.path.join(config_dir, config_file)
-        self._default_config = self._get_default_config()
-        self._cache: Optional[Dict[str, Any]] = None
-        self._cache_mtime: Optional[float] = None
-    
-    def _get_default_config(self) -> Dict[str, Any]:
-        """Get default configuration structure"""
-        return {
-            "mosque": None,
-            "chromecast": None,
-            "adhan_files": {
-                "fajr": None,
-                "dhuhr": None,
-                "asr": None,
-                "maghrib": None,
-                "isha": None
-            },
-            "adhan_volumes": {
-                "fajr": None,
-                "dhuhr": None,
-                "asr": None,
-                "maghrib": None,
-                "isha": None
-            },
-            "prayer_times": {},
-            "prayer_schedule_date": None,
-            "unsplash_access_key": None,
-        }
-    
-    def load(self) -> Dict[str, Any]:
-        """Load configuration from JSON file, using an in-memory cache keyed by mtime."""
-        if os.path.exists(self.config_file):
-            try:
-                mtime = os.path.getmtime(self.config_file)
-                if self._cache is not None and mtime == self._cache_mtime:
-                    return copy.deepcopy(self._cache)
-                with open(self.config_file, "r") as f:
-                    config = json.load(f)
-                self._cache = config
-                self._cache_mtime = mtime
-                return copy.deepcopy(config)
-            except (json.JSONDecodeError, IOError) as e:
-                print(f"Error loading config: {e}")
-                return self._default_config.copy()
-        return self._default_config.copy()
+        self._lock = threading.RLock()
+        self._cache: dict[str, Any] | None = None
+        self._cache_stamp: Stamp | None = None
+        self._backed_up_stamp: Stamp | None = None
+        self._lock_file = self.config_file + ".lock"
 
-    def save(self, config: Dict[str, Any]) -> bool:
-        """Save configuration to JSON file and update in-memory cache."""
+    # ------------------------------------------------------------------ read
+    @staticmethod
+    def _stamp_of(st: os.stat_result) -> Stamp:
+        return (st.st_ino, st.st_mtime_ns, st.st_size)
+
+    def _backup_corrupt(self, stamp: Stamp) -> None:
+        if self._backed_up_stamp == stamp:
+            return
+        self._backed_up_stamp = stamp
+        backup = f"{self.config_file}.{time.strftime('%Y%m%d%H%M%S')}.bak"
         try:
+            shutil.copy2(self.config_file, backup)
+            logger.error("Config file is unreadable; copied to %s", backup)
+        except OSError:
+            logger.exception("Config file is unreadable and the backup copy failed")
+
+    def _read(self) -> tuple[dict[str, Any], bool]:
+        """Return ``(config, corrupt)``; ``corrupt`` means defaults stand in for a bad file."""
+        with self._lock:
+            try:
+                st = os.stat(self.config_file)
+            except FileNotFoundError:
+                return default_config(), False
+            except OSError:
+                logger.exception("Cannot stat config file")
+                return default_config(), True
+
+            stamp = self._stamp_of(st)
+            if self._cache is not None and stamp == self._cache_stamp:
+                return copy.deepcopy(self._cache), False
+
+            try:
+                with open(self.config_file, encoding="utf-8") as f:
+                    raw = json.load(f)
+                if not isinstance(raw, dict):
+                    raise ValueError("top-level JSON value is not an object")
+            except (ValueError, OSError) as exc:
+                logger.error("Error loading config: %s", exc)
+                self._backup_corrupt(stamp)
+                return default_config(), True
+
+            config = _merge_defaults(default_config(), raw)
+            self._cache, self._cache_stamp = config, stamp
+            return copy.deepcopy(config), False
+
+    def load(self) -> dict[str, Any]:
+        """Load the config merged over defaults. A bad file reads as defaults (never written)."""
+        return self._read()[0]
+
+    # ----------------------------------------------------------------- write
+    def save(self, config: dict[str, Any]) -> None:
+        """Atomically write ``config``. Raises OSError on failure."""
+        with self._lock:
             os.makedirs(self.config_dir, exist_ok=True)
-            with open(self.config_file, "w") as f:
-                json.dump(config, f, indent=2)
+            fd, tmp_path = tempfile.mkstemp(dir=self.config_dir, prefix=".config-", suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                try:
+                    os.chmod(tmp_path, os.stat(self.config_file).st_mode & 0o777)
+                except FileNotFoundError:
+                    os.chmod(tmp_path, 0o600)  # contains credentials
+                stamp = self._stamp_of(os.stat(tmp_path))  # inode/mtime/size survive the rename
+                os.replace(tmp_path, self.config_file)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
             self._cache = copy.deepcopy(config)
-            self._cache_mtime = os.path.getmtime(self.config_file)
-            return True
-        except (IOError, OSError) as e:
-            print(f"Error saving config: {e}")
-            return False
-    
-    def update(self, updates: Dict[str, Any]) -> Dict[str, Any]:
-        """Update configuration with new values"""
-        config = self.load()
-        
-        if "mosque" in updates:
-            config["mosque"] = updates["mosque"]
-        
-        if "chromecast" in updates:
-            config["chromecast"] = updates["chromecast"]
-        
-        if "adhan_files" in updates:
-            config["adhan_files"].update(updates["adhan_files"])
-        
-        if "adhan_volumes" in updates:
-            config["adhan_volumes"].update(updates["adhan_volumes"])
-        
-        if "prayer_times" in updates:
-            config["prayer_times"] = updates["prayer_times"]
-        
-        if "prayer_schedule_date" in updates:
-            config["prayer_schedule_date"] = updates["prayer_schedule_date"]
+            self._cache_stamp = stamp
 
-        if "unsplash_access_key" in updates:
-            config["unsplash_access_key"] = updates["unsplash_access_key"]
+    @contextlib.contextmanager
+    def _exclusive(self):
+        """Thread lock plus an inter-process flock around a read-modify-write."""
+        with self._lock:
+            os.makedirs(self.config_dir, exist_ok=True)
+            with open(self._lock_file, "a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
 
-        self.save(config)
-        return config
+    def update(self, updates: dict[str, Any]) -> dict[str, Any]:
+        """Partially merge ``updates`` into the stored config and return the result.
 
+        Keys in ``MERGE_KEYS`` merge key by key; every other key is replaced.
+        Raises ``ConfigCorruptError`` instead of overwriting an unparseable file.
+        """
+        with self._exclusive():
+            config, corrupt = self._read()
+            if corrupt:
+                raise ConfigCorruptError(
+                    "config.json is unreadable; a backup copy was kept. Fix or remove it first."
+                )
+            for key, value in updates.items():
+                if key in MERGE_KEYS and isinstance(value, dict):
+                    config[key].update(value)
+                else:
+                    config[key] = copy.deepcopy(value)
+            self.save(config)
+            return config

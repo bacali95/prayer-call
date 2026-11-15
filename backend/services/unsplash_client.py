@@ -1,8 +1,9 @@
 """Unsplash API client — fetches landscape photos from curated collections"""
+
+import logging
 import math
 import os
 import random
-import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
@@ -41,7 +42,9 @@ class UnsplashClient:
             if res.ok:
                 return [p["urls"]["raw"] for p in res.json()]
         except Exception as exc:
-            logger.warning("Page fetch failed — collection=%s page=%d: %s", collection_id, page, exc)
+            logger.warning(
+                "Page fetch failed — collection=%s page=%d: %s", collection_id, page, exc
+            )
         return []
 
     def _fetch_collection(self, collection_id: str) -> list[str]:
@@ -52,15 +55,21 @@ class UnsplashClient:
                 timeout=10,
             )
             if not info.ok:
-                logger.warning("Collection info failed — id=%s status=%d", collection_id, info.status_code)
+                logger.warning(
+                    "Collection info failed — id=%s status=%d", collection_id, info.status_code
+                )
                 return []
             total_pages = math.ceil(info.json().get("total_photos", 0) / PER_PAGE)
         except Exception as exc:
             logger.warning("Collection info error — id=%s: %s", collection_id, exc)
             return []
+        if total_pages <= 0:
+            return []
 
         with ThreadPoolExecutor(max_workers=min(total_pages, 10)) as pool:
-            futures = [pool.submit(self._fetch_page, collection_id, p) for p in range(1, total_pages + 1)]
+            futures = [
+                pool.submit(self._fetch_page, collection_id, p) for p in range(1, total_pages + 1)
+            ]
             urls: list[str] = []
             for future in as_completed(futures):
                 urls.extend(future.result())

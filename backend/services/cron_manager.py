@@ -1,215 +1,211 @@
-"""Cron job management for scheduling adhan prayers"""
-from crontab import CronTab
-from typing import Dict, List, Optional
-from pathlib import Path
-from datetime import datetime
-import os
-import sys
+"""Cron job management for scheduling adhan prayers.
 
-from backend.config import ConfigManager
+The crontab is re-read for every operation (never kept as stale state) and
+written once per operation. Every interpolated value is passed through
+``shlex.quote`` and ``%`` is escaped because cron treats it as a newline.
+"""
+
+import logging
+import os
+import shlex
+import sys
+import threading
+from collections import deque
+from datetime import datetime
+from pathlib import Path
+
+from crontab import CronTab
+
+from backend import settings
+from backend.constants import ADHAN_PRAYERS, CRON_COMMENT_PREFIX, RESCHEDULE_KEY
+from backend.utils.prayer_times import parse_hhmm
+
+logger = logging.getLogger(__name__)
+
+RESCHEDULE_SCHEDULE = "0 2 * * *"
+PASSTHROUGH_ENV = ("TZ", "PUBLIC_URL", "PORT")
+
+
+def cron_escape(command: str) -> str:
+    """Escape ``%`` (cron turns an unescaped one into a newline)."""
+    return command.replace("%", r"\%")
 
 
 class CronManager:
-    def __init__(self, log_dir: str = None):
-        if log_dir is None:
-            log_dir = os.environ.get("LOG_DIR", "/var/log")
-        self.log_dir = log_dir
-        self.cron = CronTab(user=True)
-        self.job_comment_prefix = "prayer-call-"
-        self._config_dir = ConfigManager().config_dir
-    
-    def _refresh_crontab(self):
-        """Refresh the crontab object to get the latest state from disk"""
-        self.cron = CronTab(user=True)
-    
-    def _get_project_root(self) -> Path:
-        """Get the absolute path to the project root directory"""
-        backend_dir = Path(__file__).parent.parent
-        project_root = backend_dir.parent
-        return project_root.absolute()
-    
-    def _get_script_path(self) -> str:
-        """Get the absolute path to the play_adhan.py script"""
-        project_root = self._get_project_root()
-        script_path = project_root / "backend" / "scripts" / "play_adhan.py"
-        return str(script_path.absolute())
+    def __init__(
+        self,
+        log_dir: str | None = None,
+        config_dir: str | None = None,
+        upload_dir: str | None = None,
+        tabfile: str | None = None,
+        python: str | None = None,
+        project_root: Path | None = None,
+    ):
+        self.log_dir = log_dir or settings.log_dir()
+        self.config_dir = config_dir or settings.config_dir()
+        self.upload_dir = upload_dir or settings.upload_dir()
+        self.tabfile = tabfile
+        self.python = python or sys.executable
+        self.project_root = Path(project_root or settings.PROJECT_ROOT).absolute()
+        self.job_comment_prefix = CRON_COMMENT_PREFIX
+        self._lock = threading.RLock()
 
-    def _get_config_dir(self) -> str:
-        return self._config_dir
-    
-    def _get_log_file_path(self, prayer_key: str) -> str:
-        """Get the log file path for a prayer job"""
-        if prayer_key == "reschedule":
-            return f"{self.log_dir}/prayer-call-reschedule.log"
-        return f"{self.log_dir}/prayer-call-{prayer_key}.log"
-    
-    def get_last_run_time(self, prayer_key: str) -> Optional[datetime]:
-        """Get the last run time for a cron job by checking log file modification time"""
-        log_file = self._get_log_file_path(prayer_key)
-        if os.path.exists(log_file):
-            try:
-                mtime = os.path.getmtime(log_file)
-                return datetime.fromtimestamp(mtime)
-            except Exception:
-                return None
-        return None
-    
-    def get_job_logs(self, prayer_key: str, max_lines: int = 100) -> Optional[str]:
-        """Get logs from the last run of a cron job"""
-        log_file = self._get_log_file_path(prayer_key)
-        if os.path.exists(log_file):
-            try:
-                with open(log_file, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                    # Return the last max_lines lines
-                    return ''.join(lines[-max_lines:])
-            except Exception as e:
-                return f"Error reading log file: {str(e)}"
-        return None
-    
-    def clear_all_jobs(self):
-        """Remove all prayer call cron jobs (but keep reschedule job)"""
-        reschedule_comment = f"{self.job_comment_prefix}reschedule"
-        jobs_to_remove = [
-            job for job in self.cron
-            if job.comment and job.comment.startswith(self.job_comment_prefix) 
-            and job.comment != reschedule_comment
+    # --------------------------------------------------------------- helpers
+    def _open(self) -> CronTab:
+        """Read the crontab fresh from disk."""
+        if self.tabfile:
+            if not os.path.exists(self.tabfile):
+                Path(self.tabfile).touch()
+            return CronTab(tabfile=self.tabfile)
+        return CronTab(user=True)
+
+    def _comment(self, key: str) -> str:
+        return f"{self.job_comment_prefix}{key}"
+
+    def _log_file(self, key: str) -> str:
+        return f"{self.log_dir}/prayer-call-{key}.log"
+
+    def _env_prefix(self, with_log_dir: bool = True) -> str:
+        env = {"CONFIG_DIR": self.config_dir, "UPLOAD_DIR": self.upload_dir}
+        if with_log_dir:
+            env["LOG_DIR"] = self.log_dir
+        for name in PASSTHROUGH_ENV:
+            if os.environ.get(name):
+                env[name] = os.environ[name]
+        assignments = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
+        return f"env {assignments}"
+
+    def _command(self, script: str, key: str, *args: str) -> str:
+        parts = [
+            f"cd {shlex.quote(str(self.project_root))}",
+            "&&",
+            self._env_prefix(),
+            shlex.quote(self.python),
+            shlex.quote(str(self.project_root / "backend" / "scripts" / script)),
+            *(shlex.quote(a) for a in args),
+            f"> {shlex.quote(self._log_file(key))} 2>&1",
         ]
-        for job in jobs_to_remove:
-            self.cron.remove(job)
-        self.cron.write()
-    
-    def schedule_prayers(self, prayer_times: Dict[str, str], chromecast_name: str):
-        """Schedule cron jobs for all prayer times"""
-        # Clear existing prayer jobs (but keep reschedule job)
-        self.clear_all_jobs()
-        
-        # Get project root directory (where config.json is located)
-        project_root = self._get_project_root()
-        config_dir = self._get_config_dir()
-        script_path = self._get_script_path()
-        
-        for prayer_key, time_str in prayer_times.items():
-            if not time_str:
+        return cron_escape(" ".join(parts))
+
+    def _remove(self, tab: CronTab, keep_reschedule: bool) -> None:
+        resched = self._comment(RESCHEDULE_KEY)
+        for job in list(tab):
+            comment = job.comment or ""
+            if comment.startswith(self.job_comment_prefix) and not (
+                keep_reschedule and comment == resched
+            ):
+                tab.remove(job)
+
+    def _add_reschedule(self, tab: CronTab) -> None:
+        job = tab.new(
+            command=self._command("reschedule_prayers.py", RESCHEDULE_KEY),
+            comment=self._comment(RESCHEDULE_KEY),
+        )
+        job.setall(RESCHEDULE_SCHEDULE)
+
+    # ------------------------------------------------------------ scheduling
+    def schedule_prayers(self, prayer_times: dict[str, str | None]) -> list[str]:
+        """Replace all adhan jobs (and the reschedule job) in one crontab write.
+
+        Only the five adhan prayers are scheduled (shuruq and unknown keys are
+        ignored). A prayer whose time is not ``HH:MM`` is logged and skipped; the
+        others are still scheduled. Returns the scheduled prayer keys.
+        """
+        parsed: dict[str, tuple[int, int]] = {}
+        skipped: list[str] = []
+        for key in ADHAN_PRAYERS:
+            value = prayer_times.get(key)
+            if not value:
                 continue
-            
             try:
-                # Parse time (format: "HH:MM")
-                hour, minute = map(int, time_str.split(":"))
-                
-                # Create cron job with logging and CONFIG_DIR env var
-                log_file = self._get_log_file_path(prayer_key)
-                job = self.cron.new(
-                    command=f"cd {project_root} && CONFIG_DIR='{config_dir}' {sys.executable} {script_path} '{chromecast_name}' '{prayer_key}' > {log_file} 2>&1",
-                    comment=f"{self.job_comment_prefix}{prayer_key}"
+                parsed[key] = parse_hhmm(value)
+            except ValueError:
+                logger.warning("Skipping %s: invalid time %r", key, value)
+                skipped.append(key)
+
+        with self._lock:
+            tab = self._open()
+            self._remove(tab, keep_reschedule=False)
+            for key, (hour, minute) in parsed.items():
+                job = tab.new(
+                    command=self._command("play_adhan.py", key, key),
+                    comment=self._comment(key),
                 )
                 job.setall(f"{minute} {hour} * * *")
-                
-            except Exception as e:
-                print(f"Error scheduling {prayer_key}: {e}")
-        
-        # Recreate reschedule job if it was removed
-        self.schedule_reschedule_job()
-        
-        self.cron.write()
+            self._add_reschedule(tab)
+            tab.write()
+        logger.info(
+            "Scheduled prayers: %s (skipped: %s)", ", ".join(parsed) or "none", skipped or "none"
+        )
+        return list(parsed)
+
+    def schedule_reschedule_job(self) -> bool:
+        """Ensure exactly one daily 02:00 reschedule job exists."""
+        with self._lock:
+            tab = self._open()
+            tab.remove_all(comment=self._comment(RESCHEDULE_KEY))
+            self._add_reschedule(tab)
+            tab.write()
         return True
-    
-    def get_scheduled_jobs(self) -> List[Dict]:
-        """Get list of currently scheduled jobs with last run time"""
-        # Refresh crontab to get the latest state (important when reschedule job runs at 2am)
-        self._refresh_crontab()
-        
-        jobs = []
+
+    def clear_all_jobs(self) -> None:
+        """Remove all adhan jobs, keeping the reschedule job."""
+        with self._lock:
+            tab = self._open()
+            self._remove(tab, keep_reschedule=True)
+            tab.write()
+
+    def remove_job(self, prayer_key: str) -> bool:
+        with self._lock:
+            tab = self._open()
+            jobs = [j for j in tab if j.comment == self._comment(prayer_key)]
+            if not jobs:
+                return False
+            for job in jobs:
+                tab.remove(job)
+            tab.write()
+        return True
+
+    # --------------------------------------------------------------- reading
+    def get_last_run_time(self, key: str) -> datetime | None:
+        try:
+            return datetime.fromtimestamp(os.path.getmtime(self._log_file(key)))
+        except OSError:
+            return None
+
+    def get_job_logs(self, key: str, max_lines: int = 100) -> str | None:
+        """Last ``max_lines`` lines of a job's log, or None when there is no log."""
+        path = self._log_file(key)
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                return "".join(deque(f, maxlen=max(1, max_lines)))
+        except OSError as exc:
+            logger.warning("Cannot read %s: %s", path, exc)
+            return f"Error reading log file: {exc}"
+
+    def get_scheduled_jobs(self) -> list[dict]:
         today = datetime.now().date()
-        
-        for job in self.cron:
-            if job.comment and job.comment.startswith(self.job_comment_prefix):
-                prayer_key = job.comment.replace(self.job_comment_prefix, "")
-                # Get the schedule string from job slices (minute, hour, day, month, dow)
-                schedule_parts = job.slices
-                schedule_str = " ".join(str(part) for part in schedule_parts)
-                
-                # Extract planned time from schedule (minute hour * * *)
-                planned_time = None
-                if len(schedule_parts) >= 2:
-                    try:
-                        # Convert CronSlice objects to strings first
-                        minute_str = str(schedule_parts[0])
-                        hour_str = str(schedule_parts[1])
-                        # Only parse if they're not wildcards
-                        if minute_str != "*" and hour_str != "*":
-                            minute = int(minute_str)
-                            hour = int(hour_str)
-                            planned_time = f"{hour:02d}:{minute:02d}"
-                    except (ValueError, IndexError, TypeError):
-                        pass
-                
-                # Get last run time
-                last_run = self.get_last_run_time(prayer_key)
-                last_run_str = last_run.isoformat() if last_run else None
-                
-                # Check if executed today
-                executed_today = False
-                if last_run:
-                    executed_today = last_run.date() == today
-                
-                jobs.append({
-                    "prayer": prayer_key,
-                    "schedule": schedule_str,
+        jobs = []
+        for job in self._open():
+            comment = job.comment or ""
+            if not comment.startswith(self.job_comment_prefix):
+                continue
+            key = comment[len(self.job_comment_prefix) :]
+            minute, hour = str(job.slices[0]), str(job.slices[1])
+            planned_time = None
+            if minute.isdigit() and hour.isdigit():
+                planned_time = f"{int(hour):02d}:{int(minute):02d}"
+            last_run = self.get_last_run_time(key)
+            jobs.append(
+                {
+                    "prayer": key,
+                    "schedule": " ".join(str(part) for part in job.slices),
                     "planned_time": planned_time,
                     "command": str(job.command),
-                    "last_run": last_run_str,
-                    "executed_today": executed_today
-                })
+                    "last_run": last_run.isoformat() if last_run else None,
+                    "executed_today": bool(last_run and last_run.date() == today),
+                }
+            )
         return jobs
-    
-    def remove_job(self, prayer_key: str) -> bool:
-        """Remove a specific cron job by prayer name"""
-        job_comment = f"{self.job_comment_prefix}{prayer_key}"
-        jobs_to_remove = [
-            job for job in self.cron
-            if job.comment == job_comment
-        ]
-        
-        if not jobs_to_remove:
-            return False
-        
-        for job in jobs_to_remove:
-            self.cron.remove(job)
-        
-        self.cron.write()
-        return True
-    
-    def _get_reschedule_script_path(self) -> str:
-        """Get the absolute path to the reschedule_prayers.py script"""
-        project_root = self._get_project_root()
-        script_path = project_root / "backend" / "scripts" / "reschedule_prayers.py"
-        return str(script_path.absolute())
-    
-    def schedule_reschedule_job(self):
-        """Schedule a daily job at 2am to reschedule prayers"""
-        reschedule_comment = f"{self.job_comment_prefix}reschedule"
-        
-        # Remove existing reschedule job if it exists
-        jobs_to_remove = [
-            job for job in self.cron
-            if job.comment == reschedule_comment
-        ]
-        for job in jobs_to_remove:
-            self.cron.remove(job)
-        
-        # Get project root directory (where config.json is located)
-        project_root = self._get_project_root()
-        config_dir = self._get_config_dir()
-        reschedule_script_path = self._get_reschedule_script_path()
-        
-        # Create new reschedule job at 2am daily with logging and CONFIG_DIR env var
-        log_file = self._get_log_file_path("reschedule")
-        job = self.cron.new(
-            command=f"cd {project_root} && CONFIG_DIR='{config_dir}' LOG_DIR='{self.log_dir}' {sys.executable} {reschedule_script_path} > {log_file} 2>&1",
-            comment=reschedule_comment
-        )
-        job.setall("0 2 * * *")  # 2:00 AM every day
-        
-        self.cron.write()
-        return True
