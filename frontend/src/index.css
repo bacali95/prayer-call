@@ -288,3 +288,14 @@ a:not([data-slot]) {
 [data-slot="button"][data-pending] [data-show="idle"] {
   display: none;
 }
+
+/* Toast: show only the icon matching the toast's data-type. */
+[data-slot="toast"]:not([data-type="success"]) > [data-show="success"],
+[data-slot="toast"]:not([data-type="info"]) > [data-show="info"],
+[data-slot="toast"]:not([data-type="warning"]) > [data-show="warning"],
+[data-slot="toast"]:not([data-type="error"]) > [data-show="error"] {
+  display: none;
+}
+[data-slot="toast"][data-type="success"] > svg { color: var(--color-success, currentColor); }
+[data-slot="toast"][data-type="warning"] > svg { color: var(--color-warning, currentColor); }
+[data-slot="toast"][data-type="error"] > svg { color: var(--color-destructive, currentColor); }

@@ -43,11 +43,11 @@ jobs:
 
       - uses: ./.github/actions/setup-frontend
 
-      - name: Lint (eslint)
-        run: bun run lint
+      - name: Lint (oxlint)
+        run: bun lint
 
       - name: Typecheck
-        run: bun run typecheck
+        run: bun check
 
   frontend-test:
     name: Frontend unit tests
