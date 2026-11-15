@@ -1,60 +1,45 @@
-# Multi-stage build for Prayer Call App
-FROM oven/bun:1.3.13-alpine AS frontend-builder
-
+# Frontend build
+FROM oven/bun:1.4.4-alpine AS frontend-builder
 WORKDIR /app/frontend
-
-# Copy frontend source
 COPY frontend/ ./
+RUN bun install --frozen-lockfile && bun run build
 
-# Install dependencies
-RUN bun install
+# Python backend
+FROM python:3.15-slim
 
-# Build React app
-RUN bun run build
+# cron needs root (it writes the user crontab and /etc/localtime), so the
+# container intentionally runs as root. The pod is the isolation boundary.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends cron tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
-# Python backend stage
-FROM python:3.14-slim
+ENV TZ=UTC \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PORT=3001 \
+    CONFIG_DIR=/app/config \
+    LOG_DIR=/app/logs
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 WORKDIR /app
 
-# Install system dependencies including timezone data
-RUN apt-get update && apt-get install -y \
-    cron \
-    tzdata \
-    && rm -rf /var/lib/apt/lists/*
-
-# Configure timezone (default to UTC, can be overridden with TZ env var)
-ENV TZ=UTC
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Copy backend application files
+COPY VERSION ./VERSION
 COPY backend/ ./backend/
-
-# Copy built frontend from builder stage
 COPY --from=frontend-builder /app/frontend/build ./static
 
-# Create uploads directory
-RUN mkdir -p uploads
+RUN mkdir -p /app/uploads /app/config /app/logs
 
-# Create config directory
-RUN mkdir -p /app/config
-
-# Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Expose port
 EXPOSE 3001
 
-# Set environment variables
-ENV FLASK_APP=backend.app
-ENV FLASK_ENV=production
-ENV PYTHONUNBUFFERED=1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/healthz' % os.environ.get('PORT', '3001'), timeout=4)"]
 
-# Use entrypoint script to start cron and Flask
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-

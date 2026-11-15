@@ -1,0 +1,261 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel a release (tag) run midway through publishing.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (ruff, pytest)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-backend
+
+      - name: Lint (ruff check)
+        run: ruff check .
+
+      - name: Format check (ruff format)
+        run: ruff format --check .
+
+      - name: Unit tests
+        run: pytest
+
+  frontend-lint:
+    name: Frontend lint, typecheck
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-frontend
+
+      - name: Lint (eslint)
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+  frontend-test:
+    name: Frontend unit tests
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-frontend
+
+      - name: Unit tests
+        run: bun run test
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-frontend
+
+      - name: Build
+        run: bun run build
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-build
+          path: frontend/build/
+          if-no-files-found: error
+          retention-days: 3
+
+  e2e:
+    name: E2E (Playwright)
+    needs: frontend-build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_SKIP_BUILD: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-frontend
+
+      - name: Download build output
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-build
+          path: frontend/build
+
+      - name: Get Playwright version
+        id: playwright
+        run: echo "version=$(bunx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright chromium and system dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
+
+      # PLAYWRIGHT_SKIP_BUILD makes the webServer only run `vite preview`
+      # against the downloaded frontend/build, so nothing is rebuilt here.
+      - name: Run e2e tests
+        run: bun run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/e2e/.results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  docker:
+    name: Docker image
+    needs: [backend, frontend-lint, frontend-test, frontend-build, e2e]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+      PUSH: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=Prayer Call
+            org.opencontainers.image.description=Schedules and plays the adhan on Chromecast at prayer times
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image (load locally)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test image
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          IMAGE=$(echo "$TAGS" | head -n1)
+          CONFIG_DIR=$(mktemp -d)
+          chmod 777 "$CONFIG_DIR"
+          echo '{}' > "$CONFIG_DIR/config.json"
+          docker run -d --name smoke -p 3001:3001 \
+            -v "$CONFIG_DIR:/app/config" \
+            "$IMAGE"
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3001/healthz >/dev/null 2>&1; then
+              echo "healthz OK after ${i}s"
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' smoke)" != "true" ]; then
+              echo "::error::Container exited early"
+              exit 1
+            fi
+            if [ "$i" = "60" ]; then
+              echo "::error::Timed out waiting for /healthz"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          CONFIG_BODY=$(mktemp)
+          CONFIG_CODE=$(curl -sS -o "$CONFIG_BODY" -w '%{http_code}' -H 'Accept: application/json' http://localhost:3001/api/config)
+          if [ "$CONFIG_CODE" != "200" ]; then
+            echo "::error::GET /api/config returned $CONFIG_CODE"
+            exit 1
+          fi
+          if ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$CONFIG_BODY"; then
+            echo "::error::GET /api/config did not return JSON"
+            exit 1
+          fi
+          if grep -q "unsplash_access_key" "$CONFIG_BODY"; then
+            echo "::error::GET /api/config leaked unsplash_access_key"
+            exit 1
+          fi
+
+          if ! curl -fsS http://localhost:3001/ | grep -qi "<html"; then
+            echo "::error::GET / did not return HTML"
+            exit 1
+          fi
+
+          NOPE_CODE=$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:3001/api/nope)
+          if [ "$NOPE_CODE" != "404" ]; then
+            echo "::error::GET /api/nope returned $NOPE_CODE, expected 404"
+            exit 1
+          fi
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker logs smoke || true
+
+      - name: Push image
+        if: env.PUSH == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
