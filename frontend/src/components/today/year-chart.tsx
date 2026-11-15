@@ -19,12 +19,15 @@ const BANDS = [
   { key: "afterIsha", label: "After Isha", color: "var(--chart-6)" },
 ] as const;
 
-export default function YearChart({ year }: { year: YearData }) {
+function currentDayOfYear(year: number): number | null {
   const today = new Date();
-  const dayOfYear =
-    today.getFullYear() === year.year
-      ? Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000)
-      : null;
+  return today.getFullYear() === year
+    ? Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000)
+    : null;
+}
+
+export default function YearChart({ year }: { year: YearData }) {
+  const dayOfYear = currentDayOfYear(year.year);
 
   const rows = useMemo(
     () =>

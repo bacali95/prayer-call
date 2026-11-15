@@ -104,10 +104,10 @@ Frontend (in `frontend/`):
 
 ```bash
 bun run lint
-bun run typecheck
+bun check
 bun run test        # Vitest + Testing Library
 bun run test:e2e    # Playwright; builds and serves on :4173
-bun run build       # typecheck, then Vite build into frontend/build
+bun run build       # bun check, then Vite build into frontend/build
 ```
 
 Playwright needs its browsers installed once (`bunx playwright install chromium`).
