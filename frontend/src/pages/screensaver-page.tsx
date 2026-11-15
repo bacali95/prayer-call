@@ -84,27 +84,27 @@ export default function ScreensaverPage() {
           </p>
         </section>
 
-        <section aria-label="Next prayer" className="ss-card mx-auto w-full max-w-[min(100%,72rem)]" style={{ padding: "clamp(14px, 3vmin, 40px)" }}>
+        <section aria-label="Next prayer" className="ss-card w-full" style={{ padding: "clamp(12px, 2.5vmin, 32px)", marginTop: "clamp(32px, 14vmin, 220px)" }}>
           {next && meta ? (
             <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
               <div>
-                <p className="tracking-[0.2em] text-(--ss-brass) uppercase" style={{ fontSize: "clamp(0.7rem, 1.8vmin, 1.1rem)" }}>
+                <p className="tracking-[0.2em] text-(--ss-brass) uppercase" style={{ fontSize: "clamp(0.65rem, 1.5vmin, 0.95rem)" }}>
                   {next.tomorrow ? "Tomorrow" : "Next prayer"}
                 </p>
-                <p className="flex flex-wrap items-baseline gap-x-[0.5em]" style={{ fontSize: "clamp(2rem, 8vmin, 5.5rem)" }}>
+                <p className="flex flex-wrap items-baseline gap-x-[0.5em]" style={{ fontSize: "clamp(1.6rem, 6vmin, 4.25rem)" }}>
                   <span className="font-display leading-tight font-medium">{meta.en}</span>
                   <span lang="ar" dir="rtl" className="text-(--ss-brass)">
                     {meta.ar}
                   </span>
                 </p>
-                <p className="text-(--ss-muted)" style={{ fontSize: "clamp(0.9rem, 2.4vmin, 1.5rem)" }}>
+                <p className="text-(--ss-muted)" style={{ fontSize: "clamp(0.8rem, 2vmin, 1.25rem)" }}>
                   Adhan at <span className="font-display-num text-(--ss-fg)">{next.time}</span>
                   {" · "}in {formatDuration(untilNext)}
                 </p>
               </div>
               <p
                 className="font-display-num leading-none font-light text-(--ss-brass)"
-                style={{ fontSize: "clamp(2.6rem, 11vmin, 8rem)" }}
+                style={{ fontSize: "clamp(2rem, 8.5vmin, 6rem)" }}
                 aria-label={`${formatDuration(untilNext)} until ${meta.en}`}
               >
                 {formatCountdown(untilNext)}
@@ -135,7 +135,7 @@ export default function ScreensaverPage() {
                     )}
                     style={{ padding: "clamp(8px, 1.8vmin, 22px) clamp(4px, 1vmin, 12px)" }}
                   >
-                    <p style={{ fontSize: "clamp(0.75rem, 2vmin, 1.3rem)" }}>
+                    <p style={{ fontSize: "clamp(0.85rem, 2.4vmin, 1.6rem)" }}>
                       <span className={isNext ? "text-(--ss-brass)" : "text-(--ss-muted)"}>{m.en}</span>
                       <span lang="ar" dir="rtl" className="ml-2 text-(--ss-muted)">
                         {m.ar}
@@ -143,7 +143,7 @@ export default function ScreensaverPage() {
                     </p>
                     <p
                       className={cn("font-display-num", isNext && "text-(--ss-brass)")}
-                      style={{ fontSize: "clamp(1.2rem, 4.2vmin, 2.8rem)" }}
+                      style={{ fontSize: "clamp(1.4rem, 5vmin, 3.3rem)" }}
                     >
                       {e.time}
                     </p>

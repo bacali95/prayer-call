@@ -1,5 +1,7 @@
 # Prayer Call
 
+![Prayer Call screensaver](docs/screenshots/screensaver-landscape.png)
+
 Prayer Call schedules adhan (prayer call) on Chromecast devices. A Flask backend
 reads prayer times for a Mawaqit mosque, schedules one system cron job per adhan
 prayer, and plays the configured MP3 on the chosen Chromecast at prayer time. A
@@ -14,6 +16,17 @@ React (Vite) single-page app manages it. Version 2.0.0.
 - **Settings**: application configuration.
 - **System**: system status and version.
 - **Screensaver** (`/screensaver`): full-screen photo slideshow from Unsplash.
+
+## Screenshots
+
+| Today (dark) | Today (light) |
+| --- | --- |
+| ![Today page, dark theme](docs/screenshots/desktop-dark-today.png) | ![Today page, light theme](docs/screenshots/desktop-light-today.png) |
+| **Adhan** | **Screensaver (portrait)** |
+| ![Adhan page](docs/screenshots/desktop-dark-adhan.png) | ![Screensaver, portrait](docs/screenshots/screensaver-portrait.png) |
+
+Screenshots come from the Playwright suite (`cd frontend && bun run test:e2e`),
+which writes them to `frontend/e2e/screenshots/`.
 
 ## Quick start (local development)
 
