@@ -1,4 +1,5 @@
 """Network utility functions"""
+
 import socket
 from functools import lru_cache
 
@@ -19,4 +20,3 @@ def get_local_ip():
             return socket.gethostbyname(socket.gethostname())
         except Exception:
             return "localhost"
-

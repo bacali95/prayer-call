@@ -1,162 +1,118 @@
 import type {
+  CastDevice,
   Config,
-  Mosque,
-  PrayerTimes,
-  ChromecastDevice,
-  FileInfo,
+  ConfigUpdate,
   CronJob,
-} from "../types";
+  FileInfo,
+  Mosque,
+  YearData,
+} from "@/lib/types";
+import type { PrayerTimes } from "@/lib/prayers";
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+const API_BASE: string = import.meta.env.VITE_API_URL || "/api";
 
-// API Functions
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+function extractMessage(body: unknown, fallback: string): string {
+  if (body && typeof body === "object" && "error" in body) {
+    const e = (body as { error: unknown }).error;
+    if (typeof e === "string" && e) return e;
+  }
+  return fallback;
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, init);
+  } catch {
+    throw new ApiError("Cannot reach the server. Check your connection.", 0);
+  }
+  const text = await response.text();
+  let body: unknown = undefined;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = undefined;
+    }
+  }
+  if (!response.ok) {
+    throw new ApiError(extractMessage(body, `Request failed (${response.status})`), response.status);
+  }
+  return body as T;
+}
+
+function json(method: string, data: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  };
+}
+
+const enc = encodeURIComponent;
+
 export const api = {
-  // Config
-  getConfig: async (): Promise<Config> => {
-    const response = await fetch(`${API_BASE}/config`);
-    if (!response.ok) throw new Error("Failed to load configuration");
-    return response.json();
-  },
+  getConfig: () => request<Config>("/config"),
+  updateConfig: (updates: ConfigUpdate) => request<Config>("/config", json("POST", updates)),
+  getVersion: () => request<{ version: string }>("/version"),
 
-  updateConfig: async (updates: Partial<Config>): Promise<Config> => {
-    const response = await fetch(`${API_BASE}/config`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    if (!response.ok) throw new Error("Failed to update configuration");
-    return response.json();
-  },
+  searchMosques: (q: string) => request<{ mosques: Mosque[] }>(`/mosques/search?${new URLSearchParams({ q })}`),
+  getPrayerTimes: (mosqueId: string) => request<PrayerTimes>(`/mosques/${enc(mosqueId)}/prayer-times`),
+  getYear: (mosqueId: string) => request<YearData>(`/mosques/${enc(mosqueId)}/prayer-times/year`),
 
-  // Mosques
-  searchMosques: async (query: string): Promise<{ mosques: Mosque[] }> => {
-    const response = await fetch(
-      `${API_BASE}/mosques/search?${new URLSearchParams({ q: query })}`,
-    );
-    if (!response.ok) throw new Error("Failed to search mosques");
-    return response.json();
-  },
+  scanSpeakers: (timeout = 10) =>
+    request<{ devices: CastDevice[] }>(`/chromecasts/scan?${new URLSearchParams({ timeout: String(timeout) })}`),
 
-  getPrayerTimes: async (mosqueId: string): Promise<PrayerTimes> => {
-    const response = await fetch(
-      `${API_BASE}/mosques/${mosqueId}/prayer-times`,
-    );
-    if (!response.ok) throw new Error("Failed to get prayer times");
-    return response.json();
-  },
+  getFiles: () => request<{ files: FileInfo[] }>("/files"),
+  deleteFile: (name: string) =>
+    request<{ deleted: string; unassigned?: string[] }>(`/files/${enc(name)}`, { method: "DELETE" }),
+  fileUrl: (name: string) => `${API_BASE}/files/${enc(name)}`,
 
-  // Chromecast
-  scanChromecasts: async (
-    timeout: number = 10,
-  ): Promise<{
-    devices: ChromecastDevice[];
-  }> => {
-    const response = await fetch(
-      `${API_BASE}/chromecasts/scan?${new URLSearchParams({
-        timeout: timeout.toString(),
-      })}`,
-    );
-    if (!response.ok) throw new Error("Failed to scan for Chromecast devices");
-    return response.json();
-  },
+  testPlay: (data: { chromecast_name: string; filename: string; volume?: number | null }) =>
+    request<unknown>("/test/play", json("POST", data)),
 
-  // Files
-  getFiles: async (): Promise<{ files: FileInfo[] }> => {
-    const response = await fetch(`${API_BASE}/files`);
-    if (!response.ok) throw new Error("Failed to load files");
-    return response.json();
-  },
+  getCronJobs: () => request<{ jobs: CronJob[] }>("/cron/jobs"),
+  deleteCronJob: (prayer: string) => request<unknown>(`/cron/jobs/${enc(prayer)}`, { method: "DELETE" }),
+  getCronLogs: (prayer: string) => request<{ logs: string; prayer: string }>(`/cron/jobs/${enc(prayer)}/logs`),
 
-  uploadFile: async (file: File): Promise<void> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch(`${API_BASE}/files`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!response.ok) throw new Error("Failed to upload file");
-  },
-
-  deleteFile: async (filename: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/files/${filename}`, {
-      method: "DELETE",
-    });
-    if (!response.ok) throw new Error("Failed to delete file");
-  },
-
-  // Test play
-  testPlay: async (data: {
-    chromecast_name: string;
-    filename: string;
-    volume?: number | null;
-  }): Promise<void> => {
-    const response = await fetch(`${API_BASE}/test/play`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error("Failed to play adhan");
-  },
-
-  // Cron jobs
-  getCronJobs: async (): Promise<{ jobs: CronJob[] }> => {
-    const response = await fetch(`${API_BASE}/cron/jobs`);
-    if (!response.ok) throw new Error("Failed to load cron jobs");
-    return response.json();
-  },
-
-  deleteCronJob: async (prayer: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/cron/jobs/${prayer}`, {
-      method: "DELETE",
-    });
-    if (!response.ok) throw new Error("Failed to remove cron job");
-  },
-
-  getCronJobLogs: async (
-    prayer: string,
-  ): Promise<{
-    logs: string;
-    prayer: string;
-  }> => {
-    const response = await fetch(`${API_BASE}/cron/jobs/${prayer}/logs`);
-    if (!response.ok) throw new Error("Failed to load logs");
-    return response.json();
-  },
-
-  // Screensaver slides
-  getScreensaverSlides: async (): Promise<string[]> => {
-    const response = await fetch(`${API_BASE}/screensaver/slides`);
-    if (!response.ok) throw new Error("Failed to get screensaver slides");
-    const data = await response.json() as { urls: string[] };
-    return data.urls;
-  },
-
-  // Year prayer times
-  getPrayerTimesYear: async (
-    mosqueId: string,
-  ): Promise<{
-    year: number;
-    data: Array<{
-      dayOfYear: number;
-      date: string;
-      fajr: string;
-      dhuhr: string;
-      asr: string;
-      maghrib: string;
-      isha: string;
-      isDST: boolean;
-      gregorian: string;
-      hijri: string;
-    }>;
-    dstTransitions: Array<{
-      dayOfYear: number;
-      date: string;
-    }>;
-  }> => {
-    const response = await fetch(
-      `${API_BASE}/mosques/${mosqueId}/prayer-times/year`,
-    );
-    if (!response.ok) throw new Error("Failed to get year prayer times");
-    return response.json();
-  },
+  getSlides: async () => (await request<{ urls: string[] }>("/screensaver/slides")).urls ?? [],
 };
+
+/** Upload with progress reporting (fetch cannot report upload progress). */
+export function uploadFile(file: File, onProgress?: (fraction: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/files`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded / e.total);
+    };
+    xhr.onerror = () => reject(new ApiError("Cannot reach the server. Check your connection.", 0));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1);
+        resolve();
+        return;
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        body = undefined;
+      }
+      reject(new ApiError(extractMessage(body, `Upload failed (${xhr.status})`), xhr.status));
+    };
+    const form = new FormData();
+    form.append("file", file);
+    xhr.send(form);
+  });
+}

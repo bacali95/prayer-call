@@ -1,12 +1,22 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="Prayer Call App - Schedule and play adhan on Chromecast" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1a2b" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Prayer Call - schedule and play the adhan on your smart speaker" />
     <link rel="icon" href="/favicon.ico" />
-    <title>Prayer Call App</title>
+    <title>Prayer Call</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("prayer-call-theme") || "system";
+          var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -14,4 +24,3 @@
     <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>
-

@@ -1,0 +1,23 @@
+name: Setup frontend
+description: Install Bun, restore the dependency cache and install frontend dependencies
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version-file: frontend/package.json
+
+    - name: Cache Bun install cache
+      uses: actions/cache@v6
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+        restore-keys: |
+          bun-${{ runner.os }}-
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: frontend
+      run: bun install --frozen-lockfile

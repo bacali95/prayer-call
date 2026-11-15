@@ -1,71 +1,127 @@
 """Configuration routes"""
-from flask import Blueprint, request, jsonify
-from typing import TYPE_CHECKING
-from backend.utils import transform_prayer_times
 
-if TYPE_CHECKING:
-    from backend.config import ConfigManager
-    from backend.services import CronManager
+import logging
+import os
+from typing import Any
 
-config_bp = Blueprint('config', __name__, url_prefix='/api/config')
+from flask import Blueprint, jsonify
+from werkzeug.exceptions import BadRequest
 
-# Initialize managers (will be injected via app context or dependency injection)
-config_manager = None
-cron_manager = None
+from backend.config import redact
+from backend.constants import ADHAN_PRAYERS
+from backend.utils import validate_prayer_times
+
+from ._common import get_services, json_object, upload_dir
+
+logger = logging.getLogger(__name__)
+
+config_bp = Blueprint("config", __name__, url_prefix="/api/config")
+
+MAX_TEXT = 300
+MOSQUE_KEYS = ("uuid", "id", "name", "address")
+CHROMECAST_KEYS = ("name", "uuid", "model_name", "cast_type", "host")
 
 
-def init_managers(cm: 'ConfigManager', cron_mgr: 'CronManager'):
-    """Initialize managers for this blueprint"""
-    global config_manager, cron_manager
-    config_manager = cm
-    cron_manager = cron_mgr
+def _opt_str(value: Any, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > MAX_TEXT:
+        raise BadRequest(f"{field} must be a string of at most {MAX_TEXT} characters")
+    return value
+
+
+def _clean_object(value: Any, field: str, keys: tuple[str, ...], required: str) -> dict | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise BadRequest(f"{field} must be an object or null")
+    clean = {k: _opt_str(value.get(k), f"{field}.{k}") for k in keys if k in value}
+    if not clean.get(required):
+        raise BadRequest(f"{field}.{required} is required")
+    return clean
+
+
+def _prayer_map(value: Any, field: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise BadRequest(f"{field} must be an object")
+    unknown = set(value) - set(ADHAN_PRAYERS)
+    if unknown:
+        raise BadRequest(f"Unknown prayer(s) in {field}: {', '.join(sorted(map(str, unknown)))}")
+    return value
+
+
+def _validate(data: dict[str, Any]) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+
+    if "mosque" in data:
+        updates["mosque"] = _clean_object(data["mosque"], "mosque", MOSQUE_KEYS, "uuid")
+
+    if "chromecast" in data:
+        updates["chromecast"] = _clean_object(
+            data["chromecast"], "chromecast", CHROMECAST_KEYS, "name"
+        )
+
+    if "adhan_files" in data:
+        files = _prayer_map(data["adhan_files"], "adhan_files")
+        for prayer, name in files.items():
+            if name is None:
+                continue
+            if (
+                not isinstance(name, str)
+                or not name
+                or os.path.basename(name) != name
+                or not os.path.isfile(os.path.join(upload_dir(), name))
+            ):
+                raise BadRequest(f"adhan_files.{prayer}: file does not exist")
+        updates["adhan_files"] = files
+
+    if "adhan_volumes" in data:
+        volumes = _prayer_map(data["adhan_volumes"], "adhan_volumes")
+        for prayer, volume in volumes.items():
+            if volume is None:
+                continue
+            if isinstance(volume, bool) or not isinstance(volume, (int, float)):
+                raise BadRequest(f"adhan_volumes.{prayer} must be a number between 0 and 1")
+            if not 0 <= volume <= 1:
+                raise BadRequest(f"adhan_volumes.{prayer} must be between 0 and 1")
+        updates["adhan_volumes"] = volumes
+
+    if "unsplash_access_key" in data:
+        key = data["unsplash_access_key"]
+        if key is not None and (not isinstance(key, str) or len(key) > 200):
+            raise BadRequest("unsplash_access_key must be a string")
+        updates["unsplash_access_key"] = (key or "").strip() or None
+
+    if "prayer_times" in data:
+        try:
+            updates["prayer_times"] = validate_prayer_times(data["prayer_times"])
+        except ValueError as exc:
+            raise BadRequest(str(exc)) from exc
+
+    return updates
 
 
 @config_bp.route("", methods=["GET"])
 def get_config():
-    """Get current configuration"""
-    return jsonify(config_manager.load())
+    """Current configuration (secrets redacted). Fast: no network calls."""
+    return jsonify(redact(get_services().config.load()))
 
 
 @config_bp.route("", methods=["POST"])
 def update_config():
-    """Update configuration"""
-    data = request.json
-    if data is None:
-        return jsonify({"error": "Request body required"}), 400
-    config = config_manager.load()
-    
-    # Prepare updates
-    updates = {}
-    
-    if "mosque" in data:
-        updates["mosque"] = data["mosque"]
-    
-    if "chromecast" in data:
-        updates["chromecast"] = data["chromecast"]
-    
-    if "adhan_files" in data:
-        updates["adhan_files"] = data["adhan_files"]
-    
-    if "adhan_volumes" in data:
-        updates["adhan_volumes"] = data["adhan_volumes"]
+    """Validate and partially update the configuration."""
+    services = get_services()
+    updates = _validate(json_object())
+    config = services.config.update(updates)
 
-    if "unsplash_access_key" in data:
-        updates["unsplash_access_key"] = data["unsplash_access_key"]
-
-    if "prayer_times" in data:
-        # Transform prayer times to simple string format if needed
-        updates["prayer_times"] = transform_prayer_times(data["prayer_times"])
-    
-    # Apply updates
-    updated_config = config_manager.update(updates)
-    
-    # Update cron jobs if prayer times and chromecast are set
-    if updated_config.get("chromecast") and updated_config.get("prayer_times"):
-        cron_manager.schedule_prayers(
-            updated_config["prayer_times"],
-            updated_config["chromecast"]["name"]
-        )
-    
-    return jsonify(updated_config)
-
+    response = redact(config)
+    reschedule = "prayer_times" in updates or (
+        "chromecast" in updates and config.get("prayer_times")
+    )
+    if reschedule and (config.get("chromecast") or {}).get("name") and config.get("prayer_times"):
+        try:
+            services.cron.schedule_prayers(config["prayer_times"])
+        except Exception as exc:
+            logger.exception("Config saved but cron scheduling failed")
+            response["scheduling_error"] = str(exc)
+    return jsonify(response)

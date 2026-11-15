@@ -12,7 +12,6 @@ node_modules/
 .gitignore
 .DS_Store
 *.log
-*.md
 .vscode/
 .idea/
 *.swp
@@ -26,7 +25,13 @@ config.json
 *.db
 *.sqlite
 k8s/
-docker-compose.yml
-Dockerfile
-.dockerignore
 config.json
+tests/
+.pytest_cache/
+.ruff_cache/
+.github/
+PLAN-v2.md
+config/
+logs/
+requirements-dev.txt
+pyproject.toml

@@ -1,5 +1,5 @@
 """Configuration management module"""
-from .manager import ConfigManager
 
-__all__ = ['ConfigManager']
+from .manager import ConfigCorruptError, ConfigManager, default_config, redact
 
+__all__ = ["ConfigCorruptError", "ConfigManager", "default_config", "redact"]

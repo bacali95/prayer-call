@@ -15,3 +15,8 @@ uploads/
 config.json
 frontend/build/*
 .env
+# v2
+config/
+logs/
+.pytest_cache/
+.ruff_cache/

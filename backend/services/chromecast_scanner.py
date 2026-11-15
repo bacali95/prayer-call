@@ -1,153 +1,106 @@
-"""Chromecast discovery and control"""
-import pychromecast
-from pychromecast.discovery import CastBrowser, SimpleCastListener
-from typing import List, Dict, Optional, Tuple
-import time
-import logging
-import zeroconf as zeroconf_module
+"""Chromecast discovery and playback (pychromecast 14.x)."""
 
-logging.basicConfig(level=logging.INFO)
+import logging
+import time
+
+import pychromecast
+import zeroconf as zeroconf_module
+from pychromecast.discovery import CastBrowser, SimpleCastListener
+
 logger = logging.getLogger(__name__)
 
 
 class ChromecastScanner:
-    def __init__(self):
-        self.chromecasts = []
-        self.browser = None
-
-    def _discover(self, timeout: int = 10) -> Tuple[CastBrowser, List]:
-        """Discover Chromecast devices using CastBrowser. Returns (browser, chromecasts).
-
-        A Zeroconf instance must be passed to CastBrowser — without it,
-        start_discovery() skips the mDNS ServiceBrowser and finds nothing.
-        """
+    @staticmethod
+    def _discover(timeout: float):
+        """Start mDNS discovery and wait. Returns ``(browser, zconf)``; caller must close both."""
         zconf = zeroconf_module.Zeroconf()
         browser = CastBrowser(SimpleCastListener(), zconf)
         browser.start_discovery()
         time.sleep(timeout)
+        return browser, zconf
 
-        chromecasts = []
-        for cast_info in list(browser.devices.values()):
-            try:
-                cc = pychromecast.get_chromecast_from_cast_info(cast_info, zconf)
-                if cc:
-                    chromecasts.append(cc)
-            except Exception as e:
-                logger.warning(f"Error getting Chromecast from cast_info: {e}")
-
-        return browser, chromecasts
-
-    def scan(self, timeout: int = 10) -> List[Dict]:
-        """Scan for Chromecast devices on the network"""
-        actual_timeout = max(timeout, 10)
-        browser = None
+    @staticmethod
+    def _close(browser, zconf) -> None:
         try:
-            logger.info(f"Starting Chromecast discovery with timeout={actual_timeout} seconds...")
-            browser, chromecasts = self._discover(actual_timeout)
-            logger.info(f"Discovery completed. Found {len(chromecasts)} Chromecast device(s)")
+            browser.stop_discovery()
+        except Exception:
+            logger.warning("Error stopping discovery", exc_info=True)
+        try:
+            zconf.close()
+        except Exception:
+            logger.warning("Error closing zeroconf", exc_info=True)
 
-            devices = []
-            for cc in chromecasts:
-                try:
-                    device_info = {
-                        "name": cc.name,
-                        "uuid": cc.uuid,
-                        "model_name": cc.model_name,
-                        "cast_type": cc.cast_type,
-                        "host": str(cc.socket_client.host) if hasattr(cc, "socket_client") and hasattr(cc.socket_client, "host") else None,
-                    }
-                    devices.append(device_info)
-                    logger.info(f"Found device: {device_info['name']} ({device_info['model_name']})")
-                except Exception as e:
-                    logger.warning(f"Error getting details for Chromecast: {e}")
-                    try:
-                        if hasattr(cc, "cast_info") and cc.cast_info:
-                            devices.append({
-                                "name": getattr(cc.cast_info, "friendly_name", "Unknown"),
-                                "uuid": getattr(cc.cast_info, "uuid", ""),
-                                "model_name": getattr(cc.cast_info, "model_name", "Unknown"),
-                                "cast_type": getattr(cc.cast_info, "cast_type", "cast"),
-                                "host": None,
-                            })
-                    except Exception as e2:
-                        logger.error(f"Could not extract any info from Chromecast: {e2}")
-
-            self.chromecasts = chromecasts
-
-            if not devices:
-                logger.warning("No Chromecast devices found. Troubleshooting tips:")
-                logger.warning("  1. Ensure Chromecast is powered on and connected to the same network")
-                logger.warning("  2. Check that mDNS/Bonjour is enabled (macOS: System Settings > General > Sharing)")
-                logger.warning("  3. Verify firewall allows mDNS traffic (UDP port 5353)")
-                logger.warning("  4. Try restarting the Chromecast device")
-                logger.warning(f"  5. Increase the timeout value (current: {timeout} seconds)")
-            else:
-                logger.info(f"Successfully found {len(devices)} Chromecast device(s)")
-
-            return devices
-
-        except Exception as e:
-            logger.error(f"Unexpected error scanning for Chromecasts: {e}", exc_info=True)
-            return []
+    def scan(self, timeout: int = 10) -> list[dict]:
+        """Return the Chromecasts found on the network. Raises on discovery errors."""
+        timeout = max(timeout, 10)
+        logger.info("Starting Chromecast discovery (%s s)", timeout)
+        browser, zconf = self._discover(timeout)
+        try:
+            devices = [
+                {
+                    "name": info.friendly_name,
+                    "uuid": str(info.uuid),
+                    "model_name": info.model_name,
+                    "cast_type": info.cast_type,
+                    "host": str(info.host) if info.host else None,
+                }
+                for info in list(browser.devices.values())
+            ]
         finally:
-            if browser:
-                try:
-                    browser.stop_discovery()
-                except Exception as e:
-                    logger.warning(f"Error stopping discovery: {e}")
+            self._close(browser, zconf)
+        if not devices:
+            logger.warning(
+                "No Chromecast found: check power, same network, mDNS (UDP 5353) and timeout"
+            )
+        return devices
 
-    def play_media(self, chromecast_name: str, media_url: str, volume: Optional[float] = None) -> bool:
-        """Play media on a specific Chromecast"""
-        browser = None
+    def play_media(self, chromecast_name: str, media_url: str, volume: float | None = None) -> bool:
+        """Play ``media_url`` on the named Chromecast. Returns False on failure."""
+        browser = zconf = chromecast = None
         try:
-            logger.info(f"Searching for Chromecast: {chromecast_name}")
-            browser, chromecasts = self._discover(timeout=10)
-
-            chromecast = next(
-                (cc for cc in chromecasts if cc.name == chromecast_name),
+            logger.info("Searching for Chromecast %r", chromecast_name)
+            browser, zconf = self._discover(10)
+            cast_info = next(
+                (i for i in list(browser.devices.values()) if i.friendly_name == chromecast_name),
                 None,
             )
-
-            if not chromecast:
-                logger.error(f"Chromecast '{chromecast_name}' not found")
+            if cast_info is None:
+                logger.error("Chromecast %r not found", chromecast_name)
                 return False
 
-            logger.info(f"Connecting to Chromecast: {chromecast_name}")
+            chromecast = pychromecast.get_chromecast_from_cast_info(cast_info, zconf)
             chromecast.wait(timeout=10)
 
             if volume is not None:
                 try:
-                    volume = max(0.0, min(1.0, float(volume)))
-                    logger.info(f"Setting volume to {volume}")
-                    chromecast.set_volume(volume)
+                    chromecast.set_volume(max(0.0, min(1.0, float(volume))))
                     time.sleep(0.5)
-                except Exception as e:
-                    logger.warning(f"Failed to set volume: {e}")
+                except Exception:
+                    logger.warning("Failed to set volume", exc_info=True)
 
-            logger.info(f"Playing media: {media_url}")
+            logger.info("Playing %s", media_url)
             chromecast.media_controller.play_media(media_url, content_type="audio/mpeg")
 
-            # Wait until Chromecast is actually buffering/playing before disconnecting.
-            # Without this the cron script exits too fast, closing the socket before
-            # the Chromecast has acknowledged the command.
+            # Wait for the device to acknowledge before disconnecting, otherwise
+            # a short-lived caller (cron script) closes the socket too early.
             deadline = time.time() + 30
             while time.time() < deadline:
                 status = chromecast.media_controller.status
                 if status and status.player_state in ("PLAYING", "BUFFERING"):
-                    break
+                    logger.info("Playback started")
+                    return True
                 time.sleep(0.5)
-            else:
-                logger.warning("Timed out waiting for playback to start")
-
-            logger.info("Media playback started successfully")
+            logger.warning("Timed out waiting for playback to start")
             return True
-
-        except Exception as e:
-            logger.error(f"Error playing media: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Error playing media")
             return False
         finally:
-            if browser:
+            if chromecast is not None:
                 try:
-                    browser.stop_discovery()
-                except Exception as e:
-                    logger.warning(f"Error stopping discovery: {e}")
+                    chromecast.disconnect(timeout=5)
+                except Exception:
+                    logger.warning("Error disconnecting Chromecast", exc_info=True)
+            if browser is not None:
+                self._close(browser, zconf)

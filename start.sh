@@ -32,24 +32,24 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Check if virtual environment exists
-if [ ! -d "venv" ]; then
+if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv venv
+    python3 -m venv .venv
 fi
 
 # Activate virtual environment
-source venv/bin/activate
+source .venv/bin/activate
 
 # Install Python dependencies
 echo "Installing Python dependencies..."
-pip install -r requirements.txt
+pip install -q -r requirements-dev.txt
 
 # Create uploads directory if it doesn't exist
 mkdir -p uploads
 
-# Start Flask backend in background
+# Start Flask backend in background (dev server on 127.0.0.1; no cron scheduling)
 echo "Starting Flask backend on port 3001..."
-python -m backend.app &
+FLASK_DEBUG=1 python -m backend.app &
 BACKEND_PID=$!
 
 # Wait a bit for backend to start

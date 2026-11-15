@@ -1,35 +1,35 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "Starting cron daemon..."
+export TZ="${TZ:-UTC}"
+export PORT="${PORT:-3001}"
 
-# Ensure timezone is set (default to UTC if not provided)
-export TZ=${TZ:-UTC}
+# Cron reads the system timezone, so point /etc/localtime at $TZ.
+if [ -e "/usr/share/zoneinfo/$TZ" ]; then
+    ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime
+    echo "$TZ" > /etc/timezone
+else
+    echo "Unknown TZ '$TZ', falling back to UTC" >&2
+    export TZ=UTC
+fi
+echo "Timezone: $TZ ($(date))"
 
-# Configure system timezone to match TZ environment variable
-# This ensures cron uses the correct timezone
-ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
-echo $TZ > /etc/timezone
+mkdir -p "${CONFIG_DIR:-/app/config}" "${LOG_DIR:-/app/logs}" "${UPLOAD_DIR:-/app/uploads}"
 
-echo "Timezone set to: $TZ"
-echo "Current time: $(date)"
-
-# Ensure cron log directory exists
-mkdir -p /var/log
-
-# Start cron in the background
-# Note: cron runs as a daemon and will continue in the background
-# System timezone is now configured, so cron will use the correct timezone
+# Cron daemon backgrounds itself; the app (re)writes the crontab at startup.
 cron
-
-# Wait a moment for cron to start
-sleep 1
-
 echo "Cron daemon started"
-echo "Listing current crontab:"
-crontab -l || echo "No crontab entries yet"
 
-echo "Starting Flask application..."
-# Run Flask app in foreground (so container stays alive)
-exec python -m backend.app
-
+# One worker: scheduling state and the crontab are process-wide. Threads handle
+# concurrency. The timeout is generous because Chromecast scan / test-play can
+# take ~40s.
+exec gunicorn \
+    --bind "0.0.0.0:${PORT}" \
+    --worker-class gthread \
+    --workers 1 \
+    --threads 8 \
+    --timeout 180 \
+    --graceful-timeout 30 \
+    --access-logfile - \
+    --error-logfile - \
+    backend.wsgi:app

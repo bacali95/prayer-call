@@ -1,30 +1,31 @@
-version: '3.8'
-
 services:
   prayer-call:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: prayer-call
+    # Chromecast discovery (mDNS) needs the host network on Linux; on Docker
+    # Desktop use the port mapping below instead and set PUBLIC_URL to a
+    # host-reachable address.
     ports:
       - "3001:3001"
     volumes:
-      - ./config.json:/app/config.json
+      - ./config:/app/config
       - ./uploads:/app/uploads
+      - ./logs:/app/logs
     environment:
-      - FLASK_ENV=production
-      - PYTHONUNBUFFERED=1
+      - CONFIG_DIR=/app/config
+      - LOG_DIR=/app/logs
+      - TZ=${TZ:-UTC}
+      # - PUBLIC_URL=http://192.168.1.10:3001
     restart: unless-stopped
-    networks:
-      - prayer-call-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3001/api/config')"]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3001/healthz', timeout=4)"
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 10s
-
-networks:
-  prayer-call-network:
-    driver: bridge
-
+      start_period: 15s

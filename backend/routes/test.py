@@ -1,45 +1,38 @@
 """Test routes"""
-from flask import Blueprint, request, jsonify
-from typing import TYPE_CHECKING
-from backend.utils.network_utils import get_local_ip
 
-if TYPE_CHECKING:
-    from backend.services import ChromecastScanner
+import os
+from urllib.parse import quote
 
-test_bp = Blueprint('test', __name__, url_prefix='/api/test')
+from flask import Blueprint, jsonify
+from werkzeug.exceptions import BadRequest, NotFound
 
-# Initialize scanner (will be injected)
-chromecast_scanner = None
+from backend import settings
 
+from ._common import get_services, json_object, upload_dir
 
-def init_scanner(scanner: 'ChromecastScanner'):
-    """Initialize scanner for this blueprint"""
-    global chromecast_scanner
-    chromecast_scanner = scanner
+test_bp = Blueprint("test", __name__, url_prefix="/api/test")
 
 
 @test_bp.route("/play", methods=["POST"])
 def test_play():
-    """Test playing adhan on Chromecast"""
-    data = request.json
-    if data is None:
-        return jsonify({"error": "Request body required"}), 400
-    chromecast_name = data.get("chromecast_name")
+    """Play an uploaded adhan file on a Chromecast."""
+    data = json_object()
+    name = data.get("chromecast_name")
     filename = data.get("filename")
     volume = data.get("volume")
-    
-    if not chromecast_name or not filename:
-        return jsonify({"error": "chromecast_name and filename required"}), 400
-    
-    # Get full URL for the file using local IP
-    local_ip = get_local_ip()
-    # Use the port from the request if available, otherwise default to 3001
-    port = request.environ.get('SERVER_PORT', '3001')
-    media_url = f"http://{local_ip}:{port}/api/files/{filename}"
-    
-    success = chromecast_scanner.play_media(chromecast_name, media_url, volume=volume)
-    
-    if success:
+
+    if not isinstance(name, str) or not name.strip() or len(name) > 200:
+        raise BadRequest("chromecast_name is required")
+    if not isinstance(filename, str) or not filename or os.path.basename(filename) != filename:
+        raise BadRequest("filename is required")
+    if volume is not None and (
+        isinstance(volume, bool) or not isinstance(volume, (int, float)) or not 0 <= volume <= 1
+    ):
+        raise BadRequest("volume must be a number between 0 and 1")
+    if not os.path.isfile(os.path.join(upload_dir(), filename)):
+        raise NotFound(f"File '{filename}' not found")
+
+    media_url = f"{settings.media_base_url()}/api/files/{quote(filename)}"
+    if get_services().scanner.play_media(name, media_url, volume=volume):
         return jsonify({"message": "Playing adhan"})
     return jsonify({"error": "Failed to play adhan"}), 500
-

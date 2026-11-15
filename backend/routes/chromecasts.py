@@ -1,31 +1,25 @@
 """Chromecast-related routes"""
-from flask import Blueprint, request, jsonify
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from backend.services import ChromecastScanner
+import logging
 
-chromecasts_bp = Blueprint('chromecasts', __name__, url_prefix='/api/chromecasts')
+from flask import Blueprint, jsonify
 
-# Initialize scanner (will be injected)
-chromecast_scanner = None
+from ._common import get_services, int_arg
 
+logger = logging.getLogger(__name__)
 
-def init_scanner(scanner: 'ChromecastScanner'):
-    """Initialize scanner for this blueprint"""
-    global chromecast_scanner
-    chromecast_scanner = scanner
+chromecasts_bp = Blueprint("chromecasts", __name__, url_prefix="/api/chromecasts")
+
+MIN_TIMEOUT, MAX_TIMEOUT = 10, 60
 
 
 @chromecasts_bp.route("/scan", methods=["GET"])
 def scan_chromecasts():
-    """Scan for Chromecast devices"""
+    """Scan the network for Chromecasts (can take up to ``timeout`` seconds)."""
+    timeout = max(MIN_TIMEOUT, min(int_arg("timeout", 20), MAX_TIMEOUT))
     try:
-        timeout = int(request.args.get("timeout", 20))
-        # Ensure minimum timeout of 10 seconds
-        timeout = max(timeout, 10)
-        devices = chromecast_scanner.scan(timeout)
-        return jsonify({"devices": devices})
-    except Exception as e:
-        return jsonify({"error": str(e), "devices": []}), 500
-
+        devices = get_services().scanner.scan(timeout)
+    except Exception as exc:
+        logger.exception("Chromecast scan failed")
+        return jsonify({"error": f"Chromecast scan failed: {exc}", "devices": []}), 500
+    return jsonify({"devices": devices})

@@ -1,48 +1,40 @@
 """Cron job management routes"""
+
 from flask import Blueprint, jsonify
-from typing import TYPE_CHECKING
+from werkzeug.exceptions import BadRequest, NotFound
 
-if TYPE_CHECKING:
-    from backend.services import CronManager
+from backend.constants import ADHAN_PRAYERS, RESCHEDULE_KEY
 
-cron_bp = Blueprint('cron', __name__, url_prefix='/api/cron')
+from ._common import get_services, int_arg
 
-# Initialize manager (will be injected)
-cron_manager = None
+cron_bp = Blueprint("cron", __name__, url_prefix="/api/cron")
 
-
-def init_manager(manager: 'CronManager'):
-    """Initialize cron manager for this blueprint"""
-    global cron_manager
-    cron_manager = manager
+LOG_KEYS = (*ADHAN_PRAYERS, RESCHEDULE_KEY)
+MAX_LOG_LINES = 1000
 
 
 @cron_bp.route("/jobs", methods=["GET"])
 def get_cron_jobs():
-    """Get scheduled cron jobs"""
-    jobs = cron_manager.get_scheduled_jobs()
-    return jsonify({"jobs": jobs})
+    return jsonify({"jobs": get_services().cron.get_scheduled_jobs()})
 
 
 @cron_bp.route("/jobs/<prayer>", methods=["DELETE"])
 def delete_cron_job(prayer):
-    """Remove a specific cron job by prayer name"""
-    success = cron_manager.remove_job(prayer)
-    if success:
+    if prayer not in ADHAN_PRAYERS:
+        raise BadRequest(f"Unknown prayer '{prayer}'")
+    if get_services().cron.remove_job(prayer):
         return jsonify({"message": f"Cron job for {prayer} removed successfully"})
-    return jsonify({"error": f"Cron job for {prayer} not found"}), 404
+    raise NotFound(f"Cron job for {prayer} not found")
 
 
 @cron_bp.route("/jobs/<prayer>/logs", methods=["GET"])
 def get_cron_job_logs(prayer):
-    """Get logs from the last run of a specific cron job"""
-    from flask import request
-    
-    max_lines = request.args.get('max_lines', default=100, type=int)
-    logs = cron_manager.get_job_logs(prayer, max_lines=max_lines)
-    
+    if prayer not in LOG_KEYS:
+        raise BadRequest(f"Unknown prayer '{prayer}'")
+    max_lines = int_arg("max_lines", 100)
+    if not 1 <= max_lines <= MAX_LOG_LINES:
+        raise BadRequest(f"max_lines must be an integer between 1 and {MAX_LOG_LINES}")
+    logs = get_services().cron.get_job_logs(prayer, max_lines=max_lines)
     if logs is None:
-        return jsonify({"error": f"No logs found for {prayer}"}), 404
-    
+        raise NotFound(f"No logs found for {prayer}")
     return jsonify({"logs": logs, "prayer": prayer})
-
