@@ -1,0 +1,67 @@
+.ss-root {
+  --ss-fg: oklch(0.96 0.012 85);
+  --ss-muted: oklch(0.84 0.025 230);
+  --ss-brass: oklch(0.86 0.12 85);
+  --pad: clamp(16px, 4vmin, 64px);
+  background: linear-gradient(160deg, oklch(0.26 0.055 240), oklch(0.15 0.04 250) 70%);
+  color: var(--ss-fg);
+  text-shadow: 0 1px 12px oklch(0.1 0.03 250 / 0.55);
+}
+
+.ss-slide {
+  opacity: 0;
+  transform: scale(1);
+  transition: opacity 2.4s ease-in-out;
+  background-size: cover;
+  background-position: center;
+}
+.ss-slide.is-active {
+  opacity: 1;
+  transform: scale(1.06);
+  transition:
+    opacity 2.4s ease-in-out,
+    transform 18s linear;
+}
+
+.ss-shade {
+  background:
+    linear-gradient(180deg, oklch(0.12 0.03 250 / 0.6) 0%, oklch(0.12 0.03 250 / 0.15) 30%, oklch(0.12 0.03 250 / 0.2) 55%, oklch(0.1 0.03 250 / 0.85) 100%),
+    radial-gradient(120% 90% at 50% 45%, transparent 40%, oklch(0.08 0.02 250 / 0.5) 100%);
+}
+
+.ss-clock {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum", "lnum";
+  font-size: clamp(4.5rem, 24vmin, 18rem);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+.ss-card {
+  background: oklch(0.14 0.035 248 / 0.62);
+  border: 1px solid oklch(1 0 0 / 0.14);
+  backdrop-filter: blur(14px);
+  border-radius: clamp(14px, 2.4vmin, 28px);
+  text-shadow: none;
+}
+
+.ss-rail {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(6px, 1.2vmin, 14px);
+}
+@media (orientation: portrait) {
+  .ss-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-slide,
+  .ss-slide.is-active {
+    transform: none;
+    transition: opacity 0.01ms;
+  }
+}

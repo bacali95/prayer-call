@@ -1,24 +1,27 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import path from "path";
+import path from "node:path";
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [tailwindcss({ optimize: true }), react()],
+  plugins: [tailwindcss(), react()],
   resolve: {
-    tsconfigPaths: true,
+    alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   server: {
     port: 3000,
     proxy: {
-      "/api": {
-        target: "http://localhost:3001",
-        changeOrigin: true,
-      },
+      "/api": { target: "http://localhost:3001", changeOrigin: true },
     },
   },
-  build: {
-    outDir: "build",
+  preview: { port: 4173 },
+  build: { outDir: "build" },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    css: false,
   },
 });
