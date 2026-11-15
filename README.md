@@ -1,300 +1,155 @@
-# Prayer Call App
+# Prayer Call
 
-A Python backend with React frontend application for scheduling and playing adhan (prayer call) on Chromecast devices.
+Prayer Call schedules adhan (prayer call) on Chromecast devices. A Flask backend
+reads prayer times for a Mawaqit mosque, schedules one system cron job per adhan
+prayer, and plays the configured MP3 on the chosen Chromecast at prayer time. A
+React (Vite) single-page app manages it. Version 2.0.0.
 
 ## Features
 
-- Select mosque from Mawaqit API
-- Discover and select Chromecast devices on local network
-- Upload and manage adhan MP3 files for each prayer
-- Automatically schedule adhan prayers using cron jobs
-- Play adhan on selected Chromecast at prayer times
+- **Today**: today's prayer times, including shuruq (display only, never played).
+- **Mosque**: search Mawaqit mosques and select one.
+- **Speaker**: scan the local network for Chromecasts, select one, send a test play.
+- **Adhan**: upload MP3 files, assign a file and volume to each prayer, view and clear cron jobs and their logs.
+- **Settings**: application configuration.
+- **System**: system status and version.
+- **Screensaver** (`/screensaver`): full-screen photo slideshow from Unsplash.
 
-## Prerequisites
+## Quick start (local development)
 
-- Python 3.7+
-- Node.js 14+ and npm
-- Chromecast device on the same local network
-- Access to Mawaqit API (may require API key - see note below)
+Prerequisites: Python 3.12+, [bun](https://bun.sh) 1.4.4 (pinned in `frontend/package.json`).
 
-## Quick Start
-
-### Option 1: Using the startup script
+Backend, in a virtual environment on port 3001:
 
 ```bash
-./start.sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+mkdir -p uploads
+FLASK_DEBUG=1 python -m backend.app
 ```
 
-This will:
-
-1. Set up Python virtual environment
-2. Install all dependencies
-3. Start the backend on port 3001
-4. Start the frontend on port 3000
-
-### Option 2: Manual setup
-
-#### Backend Setup
-
-1. Create and activate virtual environment:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-2. Install Python dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Create uploads directory:
-
-```bash
-mkdir uploads
-```
-
-4. Run the backend:
-
-```bash
-python -m backend.app
-```
-
-The backend will run on `http://localhost:3001` (accessible on your local network)
-
-#### Frontend Setup
-
-1. Navigate to frontend directory:
+Frontend, in a second shell, on port 3000 (Vite proxies `/api` to `localhost:3001`):
 
 ```bash
 cd frontend
+bun install
+bun run dev
 ```
 
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-3. Run the frontend:
-
-```bash
-npm start
-```
-
-The frontend will run on `http://localhost:3000`
-
-### Option 3: Docker Deployment
-
-#### Using Docker Compose
-
-1. Build and run with Docker Compose:
-
-```bash
-docker-compose up -d
-```
-
-The app will be available at `http://localhost:3001`
-
-2. View logs:
-
-```bash
-docker-compose logs -f
-```
-
-3. Stop the app:
-
-```bash
-docker-compose down
-```
-
-#### Using Docker directly
-
-1. Build the Docker image:
-
-```bash
-docker build -t prayer-call:latest .
-```
-
-Or use the Makefile:
-
-```bash
-make docker-build
-```
-
-2. Run the container:
-
-```bash
-docker run -p 3001:3001 \
-  -v $(pwd)/config.json:/app/config.json \
-  -v $(pwd)/uploads:/app/uploads \
-  prayer-call:latest
-```
-
-Or use the Makefile:
-
-```bash
-make docker-run
-```
-
-### Option 4: Kubernetes Deployment
-
-See the [Kubernetes Deployment Guide](k8s/README.md) for detailed instructions.
-
-Quick start:
-
-```bash
-# Build and push image (if using remote registry)
-make build-push
-
-# Deploy to Kubernetes
-make k8s-deploy
-
-# Port forward to access locally
-make k8s-port-forward
-```
-
-## Usage
-
-1. **Select Mosque**: Go to the "Mosque" tab and search for your mosque using the Mawaqit API
-2. **Select Chromecast**: Go to the "Chromecast" tab and scan for devices on your network
-3. **Upload Adhan Files**: Go to the "Adhan Files" tab to upload MP3 files and assign them to each prayer
-4. **View Schedule**: Go to the "Schedule" tab to see prayer times and verify cron jobs are scheduled
+`./start.sh` does both. The dev backend binds `127.0.0.1` and does not schedule
+cron jobs at startup. Chromecasts cannot fetch adhan files from it, so test
+playback from a real device needs the Docker or Kubernetes setup below.
 
 ## Configuration
 
-The app uses `config.json` to store:
+Settings are read from environment variables. The app's own settings live in
+`config.json` inside `CONFIG_DIR`, managed through the Settings and Mosque/Speaker/Adhan pages.
 
-- Selected mosque information
-- Selected Chromecast device
-- Adhan MP3 file paths for each prayer (fajr, dhuhr, asr, maghrib, isha)
-- Prayer times schedule
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `3001` | HTTP port for gunicorn and the dev server. Also used for the media URL and the Docker healthcheck. |
+| `CONFIG_DIR` | project root (image: `/app/config`) | Directory holding `config.json`. |
+| `UPLOAD_DIR` | `<project root>/uploads` (image: `/app/uploads`) | Directory holding uploaded adhan MP3 files. |
+| `LOG_DIR` | `/var/log` (image: `/app/logs`) | Directory for per-prayer cron logs (`prayer-call-<key>.log`). |
+| `PUBLIC_URL` | unset | Base URL the Chromecast uses to fetch adhan files. If unset, `http://<local IP>:<PORT>` is used. |
+| `TZ` | `UTC` | Timezone for cron and prayer times. An unknown value falls back to UTC. Example: `Europe/Amsterdam`. |
+| `CORS_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated origins allowed for `/api/*`. |
+| `UNSPLASH_ACCESS_KEY` | unset | Unsplash key for the screensaver. A key saved in `config.json` takes precedence. |
+| `LOG_LEVEL` | `INFO` | Python logging level. |
+| `FLASK_DEBUG` | unset | Set to `1` to enable the Flask debugger. Only used by `python -m backend.app`, never in the image. |
+| `PRAYER_CALL_SKIP_STARTUP` | unset | Set to `1` to skip startup scheduling in `backend.wsgi`. |
+| `VITE_API_URL` | `/api` | Frontend build-time API base URL. |
 
-## Important Notes
+## Docker and Docker Compose
 
-### Mawaqit API
-
-The Mawaqit API may require authentication or may not be publicly accessible. If you encounter issues:
-
-- Contact Mawaqit support for API access
-- You may need to modify `mawaqit_client.py` to add API keys or use alternative endpoints
-
-### Cron Jobs
-
-The app creates cron jobs that run daily at prayer times. These jobs:
-
-- Run the `backend.scripts.play_adhan` script
-- Require the Flask backend to be running (or accessible) when the cron job executes
-- Use the system's cron daemon (requires appropriate permissions)
-
-### Network Access
-
-To access the app from other devices on your local network:
-
-- The backend runs on `0.0.0.0:3001` by default, making it accessible on your local network
-- Access it via `http://<your-computer-ip>:3001` from other devices
-- The frontend proxy is configured for `localhost:3001` - you may need to update it for network access
-
-## Troubleshooting
-
-### Chromecast not found
-
-- Ensure Chromecast is on the same network
-- Check firewall settings
-- Try increasing the scan timeout
-
-### Adhan not playing
-
-- Verify the Flask backend is running
-- Check that the MP3 file is accessible via HTTP
-- Ensure Chromecast is powered on and connected
-
-### Cron jobs not working
-
-- Verify cron service is running: `systemctl status cron` (Linux) or check cron daemon
-- Check cron logs for errors
-- Ensure Python path in cron job is correct
-- **In Kubernetes**: Use Kubernetes CronJobs instead of system cron (see `k8s/cronjob.yaml`)
-
-## Versioning
-
-The app uses semantic versioning. The current version is stored in the `VERSION` file.
-
-### Updating the Version
-
-1. Update the `VERSION` file with the new version (e.g., `1.0.1`)
-2. Commit and push the changes
-3. (Optional) Create a git tag for the version:
-   ```bash
-   git tag v1.0.1
-   git push origin v1.0.1
-   ```
-
-### Docker Image Tags
-
-When pushing to GitHub Container Registry, images are tagged with:
-
-- `latest` - Latest build from main branch
-- `<version>` - Version from VERSION file (e.g., `1.0.0`)
-- `<short-sha>` - Short commit SHA (e.g., `a1b2c3d`)
-- `<tag-version>` - If a version tag is pushed (e.g., `v1.0.1` creates tag `1.0.1`)
-
-## Docker & Kubernetes
-
-### Building the Docker Image
-
-The Dockerfile uses a multi-stage build:
-
-1. Builds the React frontend
-2. Packages everything into a single Python image
+The image is built in two stages: the frontend is built with bun and copied to
+`/app/static`, then a `python:3.15-slim` image runs gunicorn with one worker and
+8 threads on port 3001. The image installs `cron` and `tzdata`, and the entrypoint
+starts cron before gunicorn. The app rewrites the crontab at startup.
 
 ```bash
-docker build -t prayer-call:latest .
+docker build -t prayer-call .
+docker compose up -d
+docker compose logs -f
 ```
 
-### GitHub Container Registry
+`docker-compose.yml` bind-mounts `./config`, `./uploads` and `./logs`. It uses
+host networking on Linux for Chromecast discovery. On Docker Desktop, use the
+port mapping and set `PUBLIC_URL` to a host-reachable address.
 
-The app automatically builds and pushes Docker images to GitHub Container Registry (ghcr.io) on:
+The container runs as root because cron must write the crontab and `/etc/localtime`.
+The pod or container is the isolation boundary.
 
-- Pushes to the `main` branch
-- Version tag pushes (e.g., `v1.0.0`)
+## Kubernetes notes
 
-Images are available at: `ghcr.io/<your-username>/<repo-name>:<tag>`
+- Use `hostNetwork: true`. Chromecast discovery uses mDNS, and the media URL is built from the host IP unless `PUBLIC_URL` is set.
+- Mount persistent volumes at `/app/config`, `/app/uploads` and `/app/logs`. `config.json` and the adhan files must survive restarts.
+- Set `TZ` to the mosque's timezone.
+- Run a single replica. Scheduling state lives in each container's own crontab, so two replicas would play each adhan twice.
+- Liveness and readiness probes can use `GET /healthz` on port 3001. It returns `{"status":"ok","version":"..."}` without network calls.
+- Adhan jobs run from the container's system cron, not from Kubernetes CronJobs.
 
-To pull and use the image:
+## Testing
+
+Backend (`requirements-dev.txt`):
 
 ```bash
-docker pull ghcr.io/<your-username>/<repo-name>:latest
-docker run -p 3001:3001 \
-  -v $(pwd)/config.json:/app/config.json \
-  -v $(pwd)/uploads:/app/uploads \
-  ghcr.io/<your-username>/<repo-name>:latest
+ruff check .
+ruff format --check .
+pytest
 ```
 
-### Kubernetes Deployment
+Frontend (in `frontend/`):
 
-The app includes complete Kubernetes manifests in the `k8s/` directory:
+```bash
+bun run lint
+bun run typecheck
+bun run test        # Vitest + Testing Library
+bun run test:e2e    # Playwright; builds and serves on :4173
+bun run build       # typecheck, then Vite build into frontend/build
+```
 
-- **Namespace**: Isolates the application
-- **ConfigMap**: Stores initial configuration
-- **PVC**: Persistent storage for uploads
-- **Deployment**: Main application
-- **Service**: Exposes the app within the cluster
-- **Ingress**: Optional external access
-- **CronJob**: Optional Kubernetes-based scheduling
+Playwright needs its browsers installed once (`bunx playwright install chromium`).
 
-For detailed Kubernetes deployment instructions, see [k8s/README.md](k8s/README.md).
+CI runs in `.github/workflows/ci.yml`. The backend job runs ruff and pytest, the
+frontend jobs run lint, tests and build, an e2e job runs Playwright, and a docker
+job smoke-tests the image and pushes it on `v*` tags.
 
-### Important Notes for Containerized Deployments
+## API overview
 
-1. **Chromecast Discovery**: The app needs network access to discover Chromecast devices. Ensure your container/pod has appropriate network permissions.
+All routes are under `/api` unless noted. Errors are JSON: `{"error": "<message>"}`
+with a 4xx or 5xx status. Unknown `/api/*` paths return 404 JSON.
 
-2. **Cron Jobs**:
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/healthz` | Health and version. |
+| GET | `/api/version` | Version from the `VERSION` file. |
+| GET | `/api/config` | Current configuration. Secrets are never returned. |
+| POST | `/api/config` | Partial update with validation. `adhan_files` and `adhan_volumes` are partial merges. |
+| GET | `/api/mosques/search?q=` | Search Mawaqit mosques. |
+| GET | `/api/mosques/<mosque_id>/prayer-times` | Prayer times for a mosque. |
+| GET | `/api/mosques/<mosque_id>/prayer-times/year` | Yearly prayer-time calendar. |
+| GET | `/api/chromecasts/scan` | Discover Chromecasts on the network. |
+| POST | `/api/test/play` | Test playback on a Chromecast. |
+| GET | `/api/files` | List uploaded MP3 files. |
+| POST | `/api/files` | Upload an MP3. Returns 409 if the name exists. |
+| GET | `/api/files/<filename>` | Serve an MP3 (also the Chromecast media URL). |
+| DELETE | `/api/files/<filename>` | Delete an MP3. |
+| GET | `/api/cron/jobs` | List scheduled adhan cron jobs. |
+| DELETE | `/api/cron/jobs/<prayer>` | Remove one prayer's cron job. |
+| GET | `/api/cron/jobs/<prayer>/logs?max_lines=` | Tail a prayer's cron log (1 to 1000 lines). |
+| GET | `/api/screensaver/slides` | Shuffled Unsplash photo URLs. |
 
-   - In Docker: System cron may not work reliably. Consider using an external scheduler or Kubernetes CronJobs.
-   - In Kubernetes: Use Kubernetes CronJobs (see `k8s/cronjob.yaml`) instead of system cron.
+`GET /api/config` never returns the Mawaqit credentials. It replaces
+`unsplash_access_key` with `unsplash_configured: true|false`. `POST /api/config`
+still accepts `unsplash_access_key`, and an empty string clears it.
 
-3. **Persistent Storage**: Uploads and configuration are stored in volumes. Make sure volumes are properly mounted and have write permissions.
+Other routes: `/` and static files are served from the built frontend when it is present.
+The SPA also serves `/screensaver` as a standalone page.
 
-4. **Health Checks**: The deployment includes liveness and readiness probes. Adjust timeouts if needed.
+## Frontend notes
+
+- Stack: React 19, React Router 8, TanStack Query, Tailwind CSS 4, Recharts, lucide icons, Vite 8.
+- Components use `@ui-sdk/react`. Before changing UI, read `frontend/AGENTS.md`. It points to the ui-sdk skill and the docs in `node_modules/@ui-sdk/react/docs/`.
+- Path params such as `<filename>` and `<prayer>` must be URL-encoded by the client.
