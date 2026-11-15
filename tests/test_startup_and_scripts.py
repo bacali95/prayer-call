@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -134,11 +135,10 @@ def test_mawaqit_client_wraps_errors(services, monkeypatch):
         def __init__(self, **kw):
             self.kw = kw
 
+            self.session = object()
+
         async def get_api_token(self):
             return "t"
-
-        async def fetch_mosques_by_keyword(self, q):
-            return {"mosques": [{"uuid": q}]}
 
         async def fetch_prayer_times(self):
             raise RuntimeError("network")
@@ -146,12 +146,60 @@ def test_mawaqit_client_wraps_errors(services, monkeypatch):
         async def close(self):
             closed.append(1)
 
+    async def fake_search(session, token, q):
+        assert token == "t"
+        return {"mosques": [{"uuid": q}]}
+
     monkeypatch.setattr(mc, "AsyncMawaqitClient", Fake)
+    monkeypatch.setattr(mc, "_search_request", fake_search)
     client = MawaqitClient(services.config)
     assert client.search_mosques("abc") == [{"uuid": "abc"}]
     with pytest.raises(MawaqitError, match="network"):
         client.get_prayer_times("m")
     assert len(closed) == 2
+
+
+class _FakeResponse:
+    def __init__(self, status, payload):
+        self.status, self._payload = status, payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def json(self):
+        return self._payload
+
+
+class _FakeSession:
+    def __init__(self, status, payload):
+        self.status, self.payload, self.calls = status, payload, []
+
+    def get(self, url, params=None, headers=None):
+        self.calls.append((url, params, headers))
+        return _FakeResponse(self.status, self.payload)
+
+
+def test_search_request_uses_api_access_token_header():
+    # Mawaqit's search endpoint rejects ``Authorization`` (401) since late 2026.
+    session = _FakeSession(200, [{"uuid": "x"}])
+    assert asyncio.run(mc._search_request(session, "tok", "etihad")) == [{"uuid": "x"}]
+    url, params, headers = session.calls[0]
+    assert url == mc.SEARCH_MOSQUES_URL
+    assert params == {"word": "etihad"}
+    assert headers["Api-Access-Token"] == "tok"
+    assert "Authorization" not in headers
+
+
+def test_search_request_empty_result_is_not_an_error():
+    assert asyncio.run(mc._search_request(_FakeSession(200, []), "tok", "zzz")) == []
+
+
+def test_search_request_non_200_raises():
+    with pytest.raises(MawaqitError, match="401"):
+        asyncio.run(mc._search_request(_FakeSession(401, None), "tok", "x"))
 
 
 def test_mawaqit_client_bad_credentials(services, monkeypatch):

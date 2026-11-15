@@ -8,7 +8,7 @@ import asyncio
 import logging
 
 from mawaqit import AsyncMawaqitClient
-from mawaqit.consts import BadCredentialsException
+from mawaqit.consts import SEARCH_MOSQUES_URL, BadCredentialsException
 
 from backend.config import ConfigManager
 
@@ -17,6 +17,20 @@ logger = logging.getLogger(__name__)
 
 class MawaqitError(Exception):
     """Raised when Mawaqit cannot be reached or rejects the request."""
+
+
+async def _search_request(session, token: str, query: str):
+    """Search mosques by keyword.
+
+    mawaqit 1.0.8 sends the token as ``Authorization``, which the search endpoint
+    now rejects with 401; it expects ``Api-Access-Token``. It also raises on zero
+    results, whereas an empty list is a valid answer here.
+    """
+    headers = {"Api-Access-Token": token, "Accept": "application/json"}
+    async with session.get(SEARCH_MOSQUES_URL, params={"word": query}, headers=headers) as resp:
+        if resp.status != 200:
+            raise MawaqitError(f"Mawaqit search returned HTTP {resp.status}")
+        return await resp.json()
 
 
 class MawaqitClient:
@@ -39,8 +53,8 @@ class MawaqitClient:
         creds = self._credentials()
         client = AsyncMawaqitClient(username=creds["username"], password=creds["password"])
         try:
-            await client.get_api_token()
-            data = await client.fetch_mosques_by_keyword(query)
+            token = await client.get_api_token()
+            data = await _search_request(client.session, token, query)
         except BadCredentialsException as exc:
             raise MawaqitError("Mawaqit rejected the configured credentials") from exc
         except Exception as exc:
