@@ -173,6 +173,63 @@ describe("Settings", () => {
   });
 });
 
+describe("Settings weather", () => {
+  const providers = {
+    providers: [
+      { id: "open-meteo", name: "Open-Meteo", needs_key: false, url: "https://open-meteo.com" },
+      { id: "weatherapi", name: "WeatherAPI.com", needs_key: true, url: "https://www.weatherapi.com" },
+    ],
+  };
+  const location = { name: "Alphen aan den Rijn", latitude: 52.13, longitude: 4.66 };
+
+  it("turns weather on and picks a location from the search", async () => {
+    const calls = mockFetch({
+      "GET /config": () => baseConfig,
+      "POST /config": () => baseConfig,
+      "GET /weather/providers": () => providers,
+      "GET /weather/geocode": () => ({ places: [{ ...location, region: "South Holland, Netherlands" }] }),
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(await screen.findByRole("switch", { name: /Show weather/ }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST")).toHaveLength(1));
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ weather: { enabled: true } });
+
+    await user.type(screen.getByRole("searchbox", { name: "Location" }), "alphen");
+    await user.click(await screen.findByRole("button", { name: "Use Alphen aan den Rijn, South Holland, Netherlands" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST")).toHaveLength(2));
+    expect(calls.filter((c) => c.method === "POST")[1].body).toEqual({ weather: { location } });
+  });
+
+  it("asks for a key for providers that need one and shows the live reading", async () => {
+    const config = {
+      ...baseConfig,
+      weather: { enabled: true, provider: "weatherapi", units: "metric", location },
+      weather_keys_configured: [],
+    };
+    const calls = mockFetch({
+      "GET /config": () => config,
+      "POST /config": () => ({ ...config, weather_keys_configured: ["weatherapi"] }),
+      "GET /weather/providers": () => providers,
+      "GET /weather/current": () => ({
+        weather: { temperature: 7.6, units: "metric", condition: "rain", description: "Light rain", is_day: true, provider: "weatherapi", location: "Alphen aan den Rijn", updated_at: "" },
+      }),
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Key needed")).toBeInTheDocument();
+    expect(calls.some((c) => c.path === "/weather/current")).toBe(false);
+    await user.type(screen.getByLabelText("WeatherAPI.com API key"), "wa-key");
+    await user.click(screen.getAllByRole("button", { name: "Save key" })[0]);
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST")).toHaveLength(1));
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ weather_api_keys: { weatherapi: "wa-key" } });
+    expect(await screen.findByText("8°C")).toBeInTheDocument();
+    expect(screen.getByText("Light rain in Alphen aan den Rijn")).toBeInTheDocument();
+  });
+});
+
 describe("Speaker", () => {
   it("handles devices without model or cast type", async () => {
     mockFetch({

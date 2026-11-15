@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/states";
+import { WeatherSettings } from "@/components/settings/weather-settings";
 
 export default function SettingsPage() {
   const config = useConfig();
@@ -83,6 +84,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         )}
+
+        {config.data && <WeatherSettings config={config.data} />}
 
         <Card>
           <CardHeader>

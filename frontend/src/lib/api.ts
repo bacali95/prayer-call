@@ -5,6 +5,9 @@ import type {
   CronJob,
   FileInfo,
   Mosque,
+  Place,
+  Weather,
+  WeatherProvider,
   YearData,
 } from "@/lib/types";
 import type { PrayerTimes } from "@/lib/prayers";
@@ -86,6 +89,11 @@ export const api = {
   getCronLogs: (prayer: string) => request<{ logs: string; prayer: string }>(`/cron/jobs/${enc(prayer)}/logs`),
 
   getSlides: async () => (await request<{ urls: string[] }>("/screensaver/slides")).urls ?? [],
+
+  getWeather: async () => (await request<{ weather: Weather | null }>("/weather/current")).weather,
+  getWeatherProviders: async () => (await request<{ providers: WeatherProvider[] }>("/weather/providers")).providers,
+  geocode: async (q: string) =>
+    (await request<{ places: Place[] }>(`/weather/geocode?${new URLSearchParams({ q })}`)).places,
 };
 
 /** Upload with progress reporting (fetch cannot report upload progress). */

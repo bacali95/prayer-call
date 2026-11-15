@@ -13,7 +13,31 @@ export const config = {
   prayer_times: { fajr: "06:12", shuruq: "07:58", dhuhr: "12:21", asr: "14:19", maghrib: "16:38", isha: "18:12" },
   prayer_schedule_date: { gregorian: "Sunday, November 15, 2026", hijri: "" },
   unsplash_configured: true,
+  weather: {
+    enabled: true,
+    provider: "open-meteo",
+    units: "metric",
+    location: { name: "Alphen aan den Rijn", latitude: 52.13, longitude: 4.66 },
+  },
+  weather_keys_configured: [],
 };
+
+export const weather = {
+  temperature: 8.4,
+  units: "metric",
+  condition: "partly-cloudy",
+  description: "Partly cloudy",
+  is_day: true,
+  provider: "open-meteo",
+  location: "Alphen aan den Rijn",
+  updated_at: "2026-11-15T13:30:00+00:00",
+};
+
+export const weatherProviders = [
+  { id: "open-meteo", name: "Open-Meteo", needs_key: false, url: "https://open-meteo.com" },
+  { id: "openweathermap", name: "OpenWeatherMap", needs_key: true, url: "https://openweathermap.org/api" },
+  { id: "weatherapi", name: "WeatherAPI.com", needs_key: true, url: "https://www.weatherapi.com" },
+];
 
 export const files = [
   { name: "adhan.mp3", size: 2_480_000 },
@@ -63,6 +87,10 @@ export async function mockApi(page: Page, opts: { slides?: string[] } = {}) {
     if (path === "/cron/jobs" && method === "GET") return json({ jobs });
     if (/^\/cron\/jobs\/[^/]+\/logs$/.test(path)) return json({ logs: "Playing adhan.mp3 on Hall speaker\nDone", prayer: "fajr" });
     if (path === "/files") return json({ files });
+    if (path === "/weather/current") return json({ weather });
+    if (path === "/weather/providers") return json({ providers: weatherProviders });
+    if (path === "/weather/geocode")
+      return json({ places: [{ name: "Alphen aan den Rijn", region: "South Holland, Netherlands", latitude: 52.13, longitude: 4.66 }] });
     if (path === "/screensaver/slides") return json({ urls: opts.slides ?? [] });
     if (path === "/mosques/search")
       return json({ mosques: [{ uuid: "a", id: "a", name: "Mosque Al Fath", address: "Alphen aan den Rijn" }, { uuid: "b", id: "b", name: "Mosquee Centrale", address: "Paris" }] });

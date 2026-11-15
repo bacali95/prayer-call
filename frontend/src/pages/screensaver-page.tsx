@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { useConfig, useSlides } from "@/hooks/use-api";
+import { WeatherIcon } from "@/components/weather-icon";
+import { formatTemperature } from "@/lib/weather";
+import { useConfig, useSlides, useWeather } from "@/hooks/use-api";
 import { useNow } from "@/hooks/use-now";
 import { PRAYERS } from "@/lib/prayers";
 import {
@@ -36,6 +38,8 @@ export default function ScreensaverPage() {
   const meta = next ? PRAYERS[next.key] : null;
   const untilNext = next ? next.date.getTime() - now.getTime() : 0;
   const mosque = config.data?.mosque?.name;
+  const weatherSettings = config.data?.weather;
+  const weather = useWeather(!!weatherSettings?.enabled && !!weatherSettings.location).data;
 
   const hh = String(now.getHours()).padStart(2, "0");
   const mm = String(now.getMinutes()).padStart(2, "0");
@@ -63,9 +67,28 @@ export default function ScreensaverPage() {
         style={{ padding: "var(--pad)", gap: "clamp(12px, 2.5vmin, 40px)" }}
       >
         <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-2" style={{ fontSize: "clamp(0.9rem, 2.4vmin, 1.6rem)" }}>
-          <p className="min-w-0 text-(--ss-muted)">
-            {mosque ? <span lang={/[؀-ۿ]/.test(mosque) ? "ar" : undefined}>{mosque}</span> : "Prayer Call"}
-          </p>
+          <div className="flex min-w-0 flex-col gap-[0.4em]">
+            <p className="text-(--ss-muted)">
+              {mosque ? <span lang={/[؀-ۿ]/.test(mosque) ? "ar" : undefined}>{mosque}</span> : "Prayer Call"}
+            </p>
+            {weather && (
+              <p
+                className="flex items-center gap-[0.35em]"
+                aria-label={`Weather: ${formatTemperature(weather)}, ${weather.description}`}
+                title={weather.description}
+              >
+                <WeatherIcon
+                  condition={weather.condition}
+                  isDay={weather.is_day}
+                  className="size-[2.4em] shrink-0 text-(--ss-brass)"
+                  strokeWidth={1.5}
+                />
+                <span className="font-display-num leading-none" style={{ fontSize: "2em" }}>
+                  {formatTemperature(weather)}
+                </span>
+              </p>
+            )}
+          </div>
           <div className="text-right">
             <p>{formatGregorian(now)}</p>
             <p className="text-(--ss-muted)">{formatHijri(now, "en")}</p>

@@ -47,6 +47,9 @@ export interface Config {
   prayer_times?: PrayerTimes;
   prayer_schedule_date?: PrayerScheduleDate;
   unsplash_configured?: boolean;
+  weather?: WeatherSettings;
+  /** Providers whose API key is stored on the server (keys are never sent back). */
+  weather_keys_configured?: WeatherProviderId[];
   /** Set when the config was saved but (re)scheduling the cron jobs failed. */
   scheduling_error?: string;
 }
@@ -58,6 +61,60 @@ export interface ConfigUpdate {
   adhan_files?: AdhanFiles;
   adhan_volumes?: AdhanVolumes;
   unsplash_access_key?: string;
+  /** Partial merge. */
+  weather?: Partial<WeatherSettings>;
+  /** Partial merge; "" clears that provider's key. */
+  weather_api_keys?: Partial<Record<WeatherProviderId, string>>;
+}
+
+export type WeatherProviderId = "open-meteo" | "openweathermap" | "weatherapi";
+export type WeatherUnits = "metric" | "imperial";
+export type WeatherCondition =
+  | "clear"
+  | "partly-cloudy"
+  | "cloudy"
+  | "fog"
+  | "drizzle"
+  | "rain"
+  | "snow"
+  | "thunderstorm";
+
+export interface WeatherLocation {
+  name?: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface WeatherSettings {
+  enabled: boolean;
+  provider: WeatherProviderId;
+  units: WeatherUnits;
+  location: WeatherLocation | null;
+}
+
+export interface WeatherProvider {
+  id: WeatherProviderId;
+  name: string;
+  needs_key: boolean;
+  url: string;
+}
+
+export interface Weather {
+  temperature: number;
+  units: WeatherUnits;
+  condition: WeatherCondition;
+  description: string;
+  is_day: boolean;
+  provider: WeatherProviderId;
+  location?: string | null;
+  updated_at: string;
+}
+
+export interface Place {
+  name: string;
+  region: string;
+  latitude: number;
+  longitude: number;
 }
 
 export interface YearDay {

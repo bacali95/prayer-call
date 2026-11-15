@@ -13,9 +13,14 @@ React (Vite) single-page app manages it. Version 2.0.0.
 - **Mosque**: search Mawaqit mosques and select one.
 - **Speaker**: scan the local network for Chromecasts, select one, send a test play.
 - **Adhan**: upload MP3 files, assign a file and volume to each prayer, view and clear cron jobs and their logs.
-- **Settings**: application configuration.
+- **Settings**: application configuration, including the screensaver weather.
 - **System**: system status and version.
-- **Screensaver** (`/screensaver`): full-screen photo slideshow from Unsplash.
+- **Screensaver** (`/screensaver`): full-screen photo slideshow from Unsplash,
+  with optional live weather (icon and temperature). Weather providers:
+  [Open-Meteo](https://open-meteo.com) (no key needed),
+  [OpenWeatherMap](https://openweathermap.org/api) and
+  [WeatherAPI.com](https://www.weatherapi.com) (API key needed). Set the provider,
+  units and location in Settings.
 
 ## Screenshots
 
@@ -153,10 +158,16 @@ with a 4xx or 5xx status. Unknown `/api/*` paths return 404 JSON.
 | DELETE | `/api/cron/jobs/<prayer>` | Remove one prayer's cron job. |
 | GET | `/api/cron/jobs/<prayer>/logs?max_lines=` | Tail a prayer's cron log (1 to 1000 lines). |
 | GET | `/api/screensaver/slides` | Shuffled Unsplash photo URLs. |
+| GET | `/api/weather/current` | Current weather (cached 10 minutes), or `{"weather": null}` when off. 503 when the provider fails. |
+| GET | `/api/weather/providers` | Available weather providers and whether they need a key. |
+| GET | `/api/weather/geocode?q=` | Search places for the weather location (Open-Meteo geocoding). |
 
 `GET /api/config` never returns the Mawaqit credentials. It replaces
 `unsplash_access_key` with `unsplash_configured: true|false`. `POST /api/config`
-still accepts `unsplash_access_key`, and an empty string clears it.
+still accepts `unsplash_access_key`, and an empty string clears it. Weather
+settings live under `weather` (`enabled`, `provider`, `units`, `location`), merged
+partially. Weather API keys go in `weather_api_keys` (`{"openweathermap": "..."}`,
+an empty string clears one) and come back only as `weather_keys_configured`.
 
 Other routes: `/` and static files are served from the built frontend when it is present.
 The SPA also serves `/screensaver` as a standalone page.

@@ -7,7 +7,6 @@ it is copied to a ``.bak`` file first and reads fall back to defaults only.
 """
 
 import contextlib
-import contextlib
 import copy
 import fcntl
 import json
@@ -24,7 +23,7 @@ from backend.constants import ADHAN_PRAYERS
 logger = logging.getLogger(__name__)
 
 # Keys whose dict values are merged key by key instead of being replaced.
-MERGE_KEYS = frozenset({"adhan_files", "adhan_volumes", "mawaqit"})
+MERGE_KEYS = frozenset({"adhan_files", "adhan_volumes", "mawaqit", "weather", "weather_api_keys"})
 
 
 class ConfigCorruptError(Exception):
@@ -44,6 +43,13 @@ def default_config() -> dict[str, Any]:
         "prayer_times": {},
         "prayer_schedule_date": None,
         "unsplash_access_key": None,
+        "weather": {
+            "enabled": False,
+            "provider": "open-meteo",
+            "units": "metric",
+            "location": None,
+        },
+        "weather_api_keys": {},
     }
 
 
@@ -62,11 +68,13 @@ def _merge_defaults(defaults: Any, loaded: Any) -> Any:
 
 
 def redact(config: dict[str, Any]) -> dict[str, Any]:
-    """Return the public view of a config: no secrets, plus ``unsplash_configured``."""
+    """Public view of a config: no secrets, plus which keys are configured."""
     public = copy.deepcopy(config)
     public.pop("mawaqit", None)
     key = public.pop("unsplash_access_key", None)
     public["unsplash_configured"] = bool(key or os.environ.get("UNSPLASH_ACCESS_KEY"))
+    weather_keys = public.pop("weather_api_keys", None) or {}
+    public["weather_keys_configured"] = sorted(k for k, v in weather_keys.items() if v)
     return public
 
 

@@ -8,6 +8,7 @@ from .chromecast_scanner import ChromecastScanner
 from .cron_manager import CronManager
 from .mawaqit_client import MawaqitClient, MawaqitError
 from .unsplash_client import UnsplashClient
+from .weather_client import WeatherClient, WeatherError
 
 
 @dataclass
@@ -19,6 +20,7 @@ class Services:
     mawaqit: MawaqitClient
     scanner: ChromecastScanner
     unsplash: UnsplashClient
+    weather: WeatherClient
 
 
 def build_services(
@@ -33,6 +35,7 @@ def build_services(
         mawaqit=MawaqitClient(config),
         scanner=ChromecastScanner(),
         unsplash=UnsplashClient(config),
+        weather=WeatherClient(config),
     )
 
 
@@ -43,5 +46,7 @@ __all__ = [
     "MawaqitError",
     "Services",
     "UnsplashClient",
+    "WeatherClient",
+    "WeatherError",
     "build_services",
 ]

@@ -1,6 +1,7 @@
 """Configuration routes"""
 
 import logging
+import math
 import os
 from typing import Any
 
@@ -9,6 +10,8 @@ from werkzeug.exceptions import BadRequest
 
 from backend.config import redact
 from backend.constants import ADHAN_PRAYERS
+from backend.services.weather_client import PROVIDERS
+from backend.services.weather_client import UNITS as WEATHER_UNITS
 from backend.utils import validate_prayer_times
 
 from ._common import get_services, json_object, upload_dir
@@ -48,6 +51,49 @@ def _prayer_map(value: Any, field: str) -> dict[str, Any]:
     if unknown:
         raise BadRequest(f"Unknown prayer(s) in {field}: {', '.join(sorted(map(str, unknown)))}")
     return value
+
+
+def _coordinate(value: Any, field: str, limit: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise BadRequest(f"{field} must be a number")
+    if not -limit <= value <= limit:
+        raise BadRequest(f"{field} must be between -{limit:g} and {limit:g}")
+    return float(value)
+
+
+def _clean_weather(value: Any) -> dict[str, Any]:
+    """Partial weather settings: enabled, provider, units, location (object or null)."""
+    if not isinstance(value, dict):
+        raise BadRequest("weather must be an object")
+    unknown = set(value) - {"enabled", "provider", "units", "location"}
+    if unknown:
+        raise BadRequest(f"Unknown weather setting(s): {', '.join(sorted(map(str, unknown)))}")
+    clean: dict[str, Any] = {}
+    if "enabled" in value:
+        if not isinstance(value["enabled"], bool):
+            raise BadRequest("weather.enabled must be true or false")
+        clean["enabled"] = value["enabled"]
+    if "provider" in value:
+        if value["provider"] not in PROVIDERS:
+            raise BadRequest(f"weather.provider must be one of: {', '.join(PROVIDERS)}")
+        clean["provider"] = value["provider"]
+    if "units" in value:
+        if value["units"] not in WEATHER_UNITS:
+            raise BadRequest(f"weather.units must be one of: {', '.join(WEATHER_UNITS)}")
+        clean["units"] = value["units"]
+    if "location" in value:
+        loc = value["location"]
+        if loc is None:
+            clean["location"] = None
+        elif not isinstance(loc, dict):
+            raise BadRequest("weather.location must be an object or null")
+        else:
+            clean["location"] = {
+                "name": _opt_str(loc.get("name"), "weather.location.name"),
+                "latitude": _coordinate(loc.get("latitude"), "weather.location.latitude", 90),
+                "longitude": _coordinate(loc.get("longitude"), "weather.location.longitude", 180),
+            }
+    return clean
 
 
 def _validate(data: dict[str, Any]) -> dict[str, Any]:
@@ -91,6 +137,22 @@ def _validate(data: dict[str, Any]) -> dict[str, Any]:
         if key is not None and (not isinstance(key, str) or len(key) > 200):
             raise BadRequest("unsplash_access_key must be a string")
         updates["unsplash_access_key"] = (key or "").strip() or None
+
+    if "weather" in data:
+        updates["weather"] = _clean_weather(data["weather"])
+
+    if "weather_api_keys" in data:
+        keys = data["weather_api_keys"]
+        if not isinstance(keys, dict):
+            raise BadRequest("weather_api_keys must be an object")
+        clean_keys: dict[str, str | None] = {}
+        for provider, key in keys.items():
+            if provider not in PROVIDERS or not PROVIDERS[provider].needs_key:
+                raise BadRequest(f"weather_api_keys: {provider} takes no API key")
+            if key is not None and (not isinstance(key, str) or len(key) > 200):
+                raise BadRequest(f"weather_api_keys.{provider} must be a string")
+            clean_keys[provider] = (key or "").strip() or None
+        updates["weather_api_keys"] = clean_keys
 
     if "prayer_times" in data:
         try:

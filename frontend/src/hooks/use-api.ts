@@ -9,6 +9,7 @@ export const keys = {
   cron: ["cron"] as const,
   files: ["files"] as const,
   version: ["version"] as const,
+  weather: ["weather"] as const,
 };
 
 export function useConfig(opts: { refetchInterval?: number } = {}) {
@@ -31,6 +32,7 @@ export function useUpdateConfig(successMessage?: string) {
     meta: { success: successMessage },
     onSuccess: (data) => {
       qc.setQueryData(keys.config, data);
+      void qc.invalidateQueries({ queryKey: keys.weather });
       void qc.invalidateQueries({ queryKey: keys.cron });
     },
   });
@@ -154,6 +156,31 @@ export function useYear(mosqueId: string | undefined, enabled: boolean) {
     queryFn: () => api.getYear(mosqueId as string),
     enabled: enabled && !!mosqueId,
     staleTime: 60 * 60_000,
+    retry: false,
+  });
+}
+
+/** Current weather for the screensaver; null when weather is off or has no location. */
+export function useWeather(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.weather,
+    queryFn: api.getWeather,
+    enabled,
+    refetchInterval: 10 * 60_000,
+    retry: 1,
+  });
+}
+
+export function useWeatherProviders() {
+  return useQuery({ queryKey: ["weather-providers"], queryFn: api.getWeatherProviders, staleTime: Infinity });
+}
+
+export function useGeocode(query: string) {
+  return useQuery({
+    queryKey: ["geocode", query],
+    queryFn: () => api.geocode(query),
+    enabled: query.trim().length >= 2,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }

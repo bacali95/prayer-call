@@ -5,7 +5,13 @@ import pytest
 
 from backend.app import create_app
 from backend.config import ConfigManager
-from backend.services import CronManager, MawaqitError, Services, UnsplashClient
+from backend.services import (
+    CronManager,
+    MawaqitError,
+    Services,
+    UnsplashClient,
+    WeatherClient,
+)
 
 MP3_BYTES = b"ID3\x04\x00\x00\x00\x00\x00\x00" + b"\x00" * 64
 
@@ -89,6 +95,7 @@ def services(dirs, tmp_path):
         mawaqit=FakeMawaqit(),
         scanner=FakeScanner(),
         unsplash=UnsplashClient(config),
+        weather=WeatherClient(config),
     )
 
 

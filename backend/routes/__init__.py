@@ -7,6 +7,7 @@ from .files import files_bp
 from .mosques import mosques_bp
 from .screensaver import screensaver_bp
 from .test import test_bp
+from .weather import weather_bp
 
 ALL_BLUEPRINTS = (
     config_bp,
@@ -16,6 +17,7 @@ ALL_BLUEPRINTS = (
     cron_bp,
     test_bp,
     screensaver_bp,
+    weather_bp,
 )
 
 __all__ = [
@@ -27,4 +29,5 @@ __all__ = [
     "mosques_bp",
     "screensaver_bp",
     "test_bp",
+    "weather_bp",
 ]
